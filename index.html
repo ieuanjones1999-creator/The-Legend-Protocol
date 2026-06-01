@@ -280,7 +280,7 @@ let state={
     xp:0,challengeProgress:{},bossFightProgress:{},titles:[],activeTitle:"",
     macros:[],water:[],mood:[],movies:[],tvSeries:[],
     susanOnion:{chapters:[],characters:[],storyBeats:[]},
-    workoutStreak:0,lastWorkoutDate:null,apiKey:"",
+    workoutStreak:0,lastWorkoutDate:null,apiKey:"",apiProvider:"gemini",
     deloadRecommended:false,dailyBriefing:null,lastBriefingDate:null,
     notifSettings:{workout:"",creatine:"",waterReminder:false}
   },
@@ -947,8 +947,24 @@ function buildChallenges(d){
 function buildChat(d){
   const msgs=state.chat.msgs;
   const apiKey=d.apiKey||"";
+  const provider=d.apiProvider||"gemini";
+  const isGemini=provider==="gemini";
+  const setupCard='<div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.25);border-radius:10px;padding:14px;margin-bottom:12px">'+
+    '<div style="font-size:9px;letter-spacing:3px;color:var(--acc);margin-bottom:10px">GUNTHER SETUP</div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:12px">'+
+      '<button onclick="state.data.apiProvider=\'gemini\';saveData();render()" style="flex:1;padding:8px;border-radius:7px;cursor:pointer;border:1px solid '+(isGemini?"#4ade80":"var(--card-b)")+';background:'+(isGemini?"rgba(74,222,128,0.15)":"transparent")+';color:'+(isGemini?"#4ade80":"var(--fg2)")+';font-size:11px;font-weight:700">🆓 GEMINI (FREE)</button>'+
+      '<button onclick="state.data.apiProvider=\'anthropic\';saveData();render()" style="flex:1;padding:8px;border-radius:7px;cursor:pointer;border:1px solid '+((!isGemini)?"#4ade80":"var(--card-b)")+';background:'+((!isGemini)?"rgba(74,222,128,0.15)":"transparent")+';color:'+((!isGemini)?"#4ade80":"var(--fg2)")+';font-size:11px;font-weight:700">⚡ CLAUDE (PAID)</button>'+
+    '</div>'+
+    (isGemini?'<div style="font-size:11px;color:var(--fg2);margin-bottom:10px;line-height:1.6">Free tier: 1M tokens/day. Get your key at <span style="color:#4ade80">aistudio.google.com</span> → Get API key → Create a key</div>':
+              '<div style="font-size:11px;color:var(--fg2);margin-bottom:10px;line-height:1.6">Paid. Fractions of a penny per message. Get key at <span style="color:#4ade80">console.anthropic.com</span> → API Keys</div>')+
+    '<div style="display:flex;gap:8px">'+
+      '<input class="inp" id="api-key-inp" type="password" placeholder="'+(isGemini?"Paste Gemini API key...":"Paste Anthropic API key...")+'" value="'+(apiKey?"••••••••••••••••":"")+'" style="flex:1">'+
+      '<button class="btn" onclick="saveApiKey()" style="flex-shrink:0">SAVE</button>'+
+    '</div>'+
+    (apiKey?'<div style="font-size:10px;color:#4ade80;margin-top:8px">✓ Key saved — Gunther is active ('+(isGemini?"Gemini Flash":"Claude")+')</div>':'<div style="font-size:10px;color:var(--mut);margin-top:6px">Key is stored only on this device</div>')+
+  '</div>';
   return'<div style="padding:16px;display:flex;flex-direction:column;height:calc(100vh - 86px)">'+
-  (!apiKey?'<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;margin-bottom:12px"><div style="font-size:9px;letter-spacing:3px;color:#ef4444;margin-bottom:6px">API KEY REQUIRED</div><div style="display:flex;gap:8px"><input class="inp" id="api-key-inp" type="password" placeholder="Enter Anthropic API key..." style="flex:1"><button class="btn" onclick="saveApiKey()" style="flex-shrink:0">SAVE</button></div><div style="font-size:10px;color:var(--mut);margin-top:6px">Key is stored locally on your device only</div></div>':"")+
+  setupCard+
   '<div id="chat-msgs" style="flex:1;overflow-y:auto;margin-bottom:12px">'+
     msgs.map(m=>'<div style="display:flex;justify-content:'+(m.role==="user"?"flex-end":"flex-start")+';margin-bottom:10px"><div style="max-width:82%;padding:10px 14px;line-height:1.5;font-size:13px;border-radius:'+(m.role==="user"?"14px 14px 4px 14px":"14px 14px 14px 4px")+';background:'+(m.role==="user"?"rgba(74,222,128,0.15)":"rgba(10,12,10,0.9)")+';border:1px solid '+(m.role==="user"?"rgba(74,222,128,0.4)":"rgba(74,222,128,0.15)")+';color:var(--fg);white-space:pre-wrap">'+m.text+'</div></div>').join("")+
     (state.chat.loading?'<div style="display:flex;gap:6px;padding:10px 14px">'+[0,1,2].map(i=>'<div style="width:8px;height:8px;border-radius:50%;background:#4ade80;animation:pulse 1s '+i*0.2+'s infinite;opacity:0.7"></div>').join("")+'</div>':"")+
@@ -1257,8 +1273,30 @@ function completeBossFight(id){
 
 function saveApiKey(){
   const k=document.getElementById("api-key-inp")?.value?.trim();
-  if(!k)return;
-  state.data.apiKey=k;saveData();showToast("API key saved");render();
+  if(!k||k==="••••••••••••••••")return;
+  state.data.apiKey=k;saveData();showToast("Key saved — Gunther is live");render();
+}
+
+async function callGunther(system,msgs,maxTokens){
+  const key=state.data.apiKey,provider=state.data.apiProvider||"gemini";
+  if(!key)throw new Error("No API key");
+  if(provider==="gemini"){
+    const contents=msgs.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.text||""}]}));
+    // Gemini requires alternating and starting with user — filter out leading model messages
+    const filtered=[];let lastRole="";
+    for(const c of contents){if(c.role===lastRole)continue;filtered.push(c);lastRole=c.role;}
+    if(!filtered.length||filtered[0].role!=="user")filtered.unshift({role:"user",parts:[{text:"Hello"}]});
+    const body={system_instruction:{parts:[{text:system}]},contents:filtered,generationConfig:{maxOutputTokens:maxTokens,temperature:0.8}};
+    const res=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key="+key,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const json=await res.json();
+    if(json.error)throw new Error(json.error.message);
+    return json.candidates?.[0]?.content?.parts?.[0]?.text||"Gunther offline.";
+  } else {
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-allow-browser":"true"},body:JSON.stringify({model:"claude-opus-4-8",max_tokens:maxTokens,system,messages:msgs.map(m=>({role:m.role,content:m.text}))})});
+    const json=await res.json();
+    if(json.error)throw new Error(json.error.message||json.error);
+    return json.content?.[0]?.text||"Systems check failed.";
+  }
 }
 
 function exportData(){
@@ -1342,7 +1380,7 @@ function quickAsk(){
 async function sendChat(){
   const input=document.getElementById("chat-input")?.value||state.chat.input;
   if(!input.trim()||state.chat.loading)return;
-  if(!state.data.apiKey){showToast("Set API key in Chat tab first");state.tab="Chat";render();return;}
+  if(!state.data.apiKey){showToast("Add API key in Chat tab first");state.tab="Chat";render();return;}
   state.chat.msgs.push({role:"user",text:input});
   state.chat.input="";state.chat.loading=true;
   saveChat();render();
@@ -1351,11 +1389,10 @@ async function sendChat(){
     const d=state.data;
     const exH=Object.entries(d.exerciseHistory||{}).slice(-5).map(([k,v])=>{const l=v[v.length-1];return l?k+": "+l.weight+"kg x"+l.reps+" ("+l.rpe+")":null;}).filter(Boolean).join(", ");
     const lv=getLevel(d.xp||0);
-    const sys='You are Gunther — the AI inside Ieuan\'s Legend Protocol dashboard. Intelligent, direct, slightly witty. Like a training partner who knows everything.\nUser stats: Weight: '+(d.bodyStats?.slice(-1)[0]?.weight||"?")+'kg, PBs: '+(d.pbs||[]).length+', Streak: '+(d.workoutStreak||0)+' days, Level: '+lv.icon+' '+lv.name+' ('+(d.xp||0)+' XP), Goals pending: '+(d.goals||[]).filter(g=>!g.done).length+', Todos: '+(d.todos||[]).filter(t=>!t.done).length+'\nRecent exercises: '+(exH||"none yet")+'\nSplit: D1 Chest & Shoulders, D2 Back & Triceps, D3 Legs & Biceps, REST, D5 Chest & Back, D6 Arms, D7 Legs, REST\nIeuan: ~85kg, 6ft1-2, intermediate bodybuilder. Inspired by CBum, Dorian Yates, Arnold, Ronnie Coleman. Creating manga "Susan and Onion".\nBe concise, sharp, helpful.';
-    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":state.data.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-allow-browser":"true"},body:JSON.stringify({model:"claude-opus-4-8",max_tokens:1000,system:sys,messages:state.chat.msgs.map(m=>({role:m.role,content:m.text}))})});
-    const json=await res.json();
-    state.chat.msgs.push({role:"assistant",text:json.content?.[0]?.text||"Systems check failed. Check API key."});
-  }catch(e){state.chat.msgs.push({role:"assistant",text:"Connection lost. Check API key and try again."});}
+    const sys='You are Gunther — the AI inside Ieuan\'s Legend Protocol fitness dashboard. Intelligent, direct, slightly witty. Like a training partner who knows everything.\nUser stats: Weight: '+(d.bodyStats?.slice(-1)[0]?.weight||"?")+'kg, PBs: '+(d.pbs||[]).length+', Streak: '+(d.workoutStreak||0)+' days, Level: '+lv.icon+' '+lv.name+' ('+(d.xp||0)+' XP), Goals pending: '+(d.goals||[]).filter(g=>!g.done).length+', Todos: '+(d.todos||[]).filter(t=>!t.done).length+'\nRecent exercises: '+(exH||"none yet")+'\nSplit: D1 Chest & Shoulders, D2 Back & Triceps, D3 Legs & Biceps, REST, D5 Chest & Back, D6 Arms, D7 Legs, REST\nIeuan: ~85kg, 6ft1-2, intermediate bodybuilder. Inspired by CBum, Dorian Yates, Arnold, Ronnie Coleman. Creating manga "Susan and Onion".\nBe concise, sharp, helpful.';
+    const text=await callGunther(sys,state.chat.msgs,1000);
+    state.chat.msgs.push({role:"assistant",text});
+  }catch(e){state.chat.msgs.push({role:"assistant",text:"Connection lost. Check your API key — "+e.message});}
   state.chat.loading=false;saveChat();render();
   setTimeout(()=>document.getElementById("chat-bottom")?.scrollIntoView({behavior:"smooth"}),50);
 }
@@ -1430,9 +1467,7 @@ async function generateDailyBriefing(){
   showToast("Gunther is thinking...");
   try{
     const ctx="Today: "+new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})+"\nWorkout: Day "+state.currentDay+" — "+(workout?.label||"Rest Day")+"\nSleep last night: "+(d.sleep?.slice(-1)[0]?.hours||"not logged")+"h ("+( d.sleep?.slice(-1)[0]?.quality||"")+")\nStreak: "+(d.workoutStreak||0)+" days\nLevel: "+lv.icon+" "+lv.name+" ("+(d.xp||0)+" XP)\nPending goals: "+(d.goals||[]).filter(g=>!g.done).length+"\nBodyweight: "+(d.bodyStats?.slice(-1)[0]?.weight||"not logged")+"kg\nDeload needed: "+(checkDeloadNeeded(d)?"YES":"No");
-    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":d.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-allow-browser":"true"},body:JSON.stringify({model:"claude-opus-4-8",max_tokens:300,system:"You are Gunther. Give a short, punchy daily briefing for Ieuan's training. 3-4 sentences max. Focus on what matters today. Direct, motivating, no fluff.",messages:[{role:"user",content:"Give me my daily briefing:\n"+ctx}]})});
-    const json=await res.json();
-    const text=json.content?.[0]?.text||"Systems check failed.";
+    const text=await callGunther("You are Gunther. Give a short, punchy daily briefing for Ieuan's training. 3-4 sentences max. Focus on what matters today. Direct, motivating, no fluff.",[{role:"user",text:"Give me my daily briefing:\n"+ctx}],300);
     state.data.dailyBriefing=text;
     state.data.lastBriefingDate=today;
     saveData();render();
