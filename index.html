@@ -285,7 +285,7 @@ let state={
     notifSettings:{workout:"",creatine:"",waterReminder:false}
   },
   chat:{msgs:[{role:"assistant",text:"Gunther online. Legend Protocol V2.0 loaded. Ready when you are."}],input:"",loading:false},
-  workout:{showTargets:true,showHistory:false},
+  workout:{showTargets:true,showHistory:false,showSuperset:false},
   _todoPriority:"Normal",_calMonth:null,_calYear:null,_calSel:null,
   loaded:false
 };
@@ -486,6 +486,10 @@ function buildHome(workout,d){
     '<div class="card" style="padding:12px;margin-bottom:0;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:var(--mut)">WEIGHT</div><div style="font-size:22px;color:#4ade80;font-weight:700;margin-top:2px">'+(lw?lw.weight+"kg":"—")+'</div><div style="font-size:9px;color:var(--mut)">'+(lw?.date||"log it")+'</div></div>'+
     '<div class="card" style="padding:12px;margin-bottom:0;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:var(--mut)">WATER</div>'+buildWaterRing(todayWater,3000)+'</div>'+
   '</div>'+
+  // Daily briefing
+  (d.dailyBriefing?'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="sec-title" style="margin-bottom:0">GUNTHER\'S BRIEFING</div><button onclick="generateDailyBriefing()" style="background:none;border:none;color:var(--acc);cursor:pointer;font-size:10px;letter-spacing:1px">↻ REFRESH</button></div><div style="font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap">'+d.dailyBriefing+'</div></div>':'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="sec-title" style="margin-bottom:4px">GUNTHER\'S BRIEFING</div><div style="font-size:11px;color:var(--mut)">Auto-generated daily summary</div></div><button onclick="generateDailyBriefing()" class="btn" style="font-size:11px;padding:8px 14px">BRIEF ME</button></div></div>')+
+  // Title selector
+  (d.titles?.length?'<div class="card"><div class="sec-title">ACTIVE TITLE</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+d.titles.map(t=>'<button onclick="setActiveTitle(\''+t+'\')" style="padding:5px 12px;border-radius:10px;cursor:pointer;font-size:11px;border:1px solid '+(d.activeTitle===t?"#a855f7":"var(--card-b)")+';background:'+(d.activeTitle===t?"rgba(168,85,247,0.15)":"transparent")+';color:'+(d.activeTitle===t?"#a855f7":"var(--fg2)")+'">'+t+'</button>').join("")+'</div></div>':"")+
   // Quick Gunther
   '<div class="card">'+
     '<div class="sec-title">ASK GUNTHER</div>'+
@@ -499,9 +503,17 @@ function buildHome(workout,d){
   (pbs.length?'<div class="card"><div class="sec-title">RECENT PBs</div>'+pbs.map((p,i)=>'<div style="display:flex;justify-content:space-between;padding:6px 0;'+(i<pbs.length-1?"border-bottom:1px solid var(--card-b)":"")+'"><span style="font-size:13px;color:var(--fg2)">'+p.lift+'</span><span style="font-size:13px;color:#4ade80;font-weight:700">'+p.weight+'kg × '+p.reps+'</span></div>').join("")+'</div>':"")+
   // Todos
   (todos.length?'<div class="card"><div class="sec-title">PENDING TASKS</div>'+todos.map(t=>'<div style="display:flex;align-items:center;gap:10px;padding:5px 0"><div style="width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0"></div><span style="font-size:13px;color:var(--fg2)">'+t.text+'</span></div>').join("")+'</div>':"")+
-  // Settings / backup
+  // Settings / backup + notifications
   '<div class="card">'+
-    '<div class="sec-title">DATA</div>'+
+    '<div class="sec-title">SETTINGS</div>'+
+    '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--mut);letter-spacing:2px;margin-bottom:8px">REMINDERS</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+        '<div><div style="font-size:10px;color:var(--fg2);margin-bottom:4px">Workout time</div><input class="inp" type="time" id="notif-workout" value="'+(d.notifSettings?.workout||"")+'" onchange="saveNotifSettings()"></div>'+
+        '<div><div style="font-size:10px;color:var(--fg2);margin-bottom:4px">Creatine time</div><input class="inp" type="time" id="notif-creatine" value="'+(d.notifSettings?.creatine||"")+'" onchange="saveNotifSettings()"></div>'+
+      '</div>'+
+      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--fg2)"><input type="checkbox" id="notif-water" '+(d.notifSettings?.waterReminder?"checked":"")+' style="accent-color:#4ade80" onchange="saveNotifSettings()"> Water reminder every 2 hours</label>'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--mut);letter-spacing:2px;margin-bottom:8px">BACKUP</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="btn" onclick="exportData()" style="font-size:11px;padding:7px 12px">📥 Export</button>'+
       '<label class="btn" style="font-size:11px;padding:7px 12px;cursor:pointer">📤 Import<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>'+
@@ -570,7 +582,24 @@ function buildWorkout(workout,d){
       '<button class="btn" onclick="toggleTargets()" style="padding:7px 12px;font-size:11px">'+(state.workout.showTargets?"▼ HIDE TARGETS":"▶ TARGETS")+'</button>'+
       '<button class="btn" onclick="generateWarmUp()" style="padding:7px 12px;font-size:11px">🔥 WARM UP</button>'+
       '<button class="btn" onclick="toggleHistory()" style="padding:7px 12px;font-size:11px">📋 HISTORY</button>'+
-    '</div>';
+      '<button class="btn" onclick="state.workout.showSuperset=!state.workout.showSuperset;render()" style="padding:7px 12px;font-size:11px">⚡ SUPERSET</button>'+
+    '</div>'+
+    // Superset timer panel
+    (state.workout.showSuperset?
+      '<div style="margin-bottom:14px;padding:14px;background:rgba(249,115,22,0.06);border-radius:8px;border:1px solid rgba(249,115,22,0.25)">'+
+        '<div style="font-size:10px;letter-spacing:3px;color:#f97316;margin-bottom:10px">⚡ SUPERSET TIMER</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+          '<div><div style="font-size:10px;color:var(--fg2);margin-bottom:4px">Exercise A</div>'+
+          '<input class="inp" id="ss-ex-a" placeholder="e.g. Bench Press..." style="font-size:11px"></div>'+
+          '<div><div style="font-size:10px;color:var(--fg2);margin-bottom:4px">Exercise B</div>'+
+          '<input class="inp" id="ss-ex-b" placeholder="e.g. Bent-Over Row..." style="font-size:11px"></div>'+
+        '</div>'+
+        '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'+
+          '<div style="flex:1"><div style="font-size:10px;color:var(--fg2);margin-bottom:4px">Rest between (secs)</div>'+
+          '<input class="inp" id="ss-rest" type="number" value="60" style="font-size:11px"></div>'+
+        '</div>'+
+        '<button onclick="startSuperset()" class="btn" style="background:rgba(249,115,22,0.15);border-color:#f97316;color:#f97316;font-size:11px;padding:8px 16px">▶ START SUPERSET</button>'+
+      '</div>':"")+""
     html+='<div style="font-size:11px;color:var(--fg2);margin-bottom:16px;padding:10px;background:rgba(74,222,128,0.05);border-radius:6px">🔥 <b>Warmup:</b> '+(workout?.warmup||"")+'</div>';
 
     // Session History
@@ -1358,6 +1387,56 @@ function initNotifScheduler(){
     if(settings.creatine&&t===settings.creatine)new Notification("💊 Creatine Time",{body:"Don't forget your creatine today."});
   }
   setInterval(checkTime,60000);
+}
+
+function saveNotifSettings(){
+  const workout=document.getElementById("notif-workout")?.value||"";
+  const creatine=document.getElementById("notif-creatine")?.value||"";
+  const waterReminder=document.getElementById("notif-water")?.checked||false;
+  state.data.notifSettings={workout,creatine,waterReminder};
+  if(waterReminder)Notification.requestPermission().then(p=>{if(p==="granted"){initWaterReminder();showToast("Water reminders on");}});
+  if(workout||creatine)Notification.requestPermission().then(p=>{if(p==="granted")showToast("Reminders saved");});
+  saveData();
+}
+
+function setActiveTitle(title){
+  state.data.activeTitle=state.data.activeTitle===title?"":title;
+  saveData();render();
+}
+
+// ── SUPERSET TIMER ───────────────────────────────────────────────
+function startSuperset(){
+  const exA=document.getElementById("ss-ex-a")?.value?.trim()||"Exercise A";
+  const exB=document.getElementById("ss-ex-b")?.value?.trim()||"Exercise B";
+  const rest=parseInt(document.getElementById("ss-rest")?.value||60);
+  state.timer.supersetMode=true;
+  state.timer.supersetExA=exA;
+  state.timer.supersetExB=exB;
+  state.timer.supersetSet=1;
+  state.timer.supersetPhase="A";
+  state.workout.showSuperset=false;
+  startTimer(rest,exA+" SET 1 → rest → "+exB);
+  state.timer.label=exA+" → SET 1";
+  render();
+}
+
+// ── DAILY BRIEFING ───────────────────────────────────────────────
+async function generateDailyBriefing(){
+  if(!state.data.apiKey){showToast("Set API key in Chat tab first");return;}
+  const d=state.data;
+  const today=new Date().toISOString().split("T")[0];
+  const workout=SPLIT[(state.currentDay-1)%8];
+  const lv=getLevel(d.xp||0);
+  showToast("Gunther is thinking...");
+  try{
+    const ctx="Today: "+new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})+"\nWorkout: Day "+state.currentDay+" — "+(workout?.label||"Rest Day")+"\nSleep last night: "+(d.sleep?.slice(-1)[0]?.hours||"not logged")+"h ("+( d.sleep?.slice(-1)[0]?.quality||"")+")\nStreak: "+(d.workoutStreak||0)+" days\nLevel: "+lv.icon+" "+lv.name+" ("+(d.xp||0)+" XP)\nPending goals: "+(d.goals||[]).filter(g=>!g.done).length+"\nBodyweight: "+(d.bodyStats?.slice(-1)[0]?.weight||"not logged")+"kg\nDeload needed: "+(checkDeloadNeeded(d)?"YES":"No");
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":d.apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-allow-browser":"true"},body:JSON.stringify({model:"claude-opus-4-8",max_tokens:300,system:"You are Gunther. Give a short, punchy daily briefing for Ieuan's training. 3-4 sentences max. Focus on what matters today. Direct, motivating, no fluff.",messages:[{role:"user",content:"Give me my daily briefing:\n"+ctx}]})});
+    const json=await res.json();
+    const text=json.content?.[0]?.text||"Systems check failed.";
+    state.data.dailyBriefing=text;
+    state.data.lastBriefingDate=today;
+    saveData();render();
+  }catch{showToast("Connection failed — check API key");}
 }
 
 loadState();
