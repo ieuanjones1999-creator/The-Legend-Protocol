@@ -476,7 +476,55 @@ const CHALLENGE_AUTO={
   "ds3": d=>_hadRestDayComplete(d),
   "so10":d=>_consecutiveRestDaysComplete(d,4),
   "ro4": d=>{const d3=new Set(Object.keys(d.workoutLogs||{}).filter(k=>k.startsWith("d3-")&&!k.includes("_rpe")).map(k=>k.slice(3)));const d7=new Set(Object.keys(d.workoutLogs||{}).filter(k=>k.startsWith("d7-")&&!k.includes("_rpe")).map(k=>k.slice(3)));for(const a of d3)for(const b of d7)if(Math.abs(new Date(a)-new Date(b))/86400000<=6)return true;return false;},
+  // Bench bodyweight x5
+  "sm2": d=>{const bw=_bw(d);return bw>0&&_maxLiftMinReps(d,"Barbell Bench Press",5)>=bw;},
+  // 4-week block: 28+ days span with 12+ sessions
+  "sm5": d=>_trainingSpanDays(d)>=28&&_sessionCount(d)>=12,
+  // Return after missed session (has 2 consecutive workout days)
+  "er1": d=>_consecutiveDays(d,2),
+  // Sleep + water logged same day 7 consecutive days
+  "ds2": d=>{const sl=new Set((d.sleep||[]).map(s=>s.date));const wa=new Set((d.water||[]).map(w=>w.date));const both=[...sl].filter(dt=>wa.has(dt)).sort();for(let i=0;i<=both.length-7;i++){let ok=true;for(let j=1;j<7;j++){if((new Date(both[i+j])-new Date(both[i+j-1]))/86400000>1){ok=false;break;}}if(ok)return true;}return false;},
+  // 8 consecutive weeks of training (56+ day span)
+  "ds5": d=>_trainingSpanDays(d)>=56,
+  // 100 push-ups in a day (rest day log)
+  "t2": d=>Object.values(d.restLogs||{}).some(rl=>parseFloat(rl.pushups||0)>=100),
+  // Workout after a session where every exercise was rated Max
+  "t7": d=>{const ss=Object.keys(d.workoutLogs||{}).filter(k=>k.includes("_rpe")).sort();if(ss.length<2)return false;const prevRpe=Object.values(d.workoutLogs[ss[ss.length-2]]||{});return prevRpe.length>0&&prevRpe.every(r=>r==="Max")&&_sessionCount(d)>=2;},
+  // 5 consecutive bodyweight log entries
+  "cb3": d=>{const stats=[...(d.bodyStats||[])].sort((a,b)=>(a.ts||0)-(b.ts||0));for(let i=0;i<=stats.length-5;i++){let ok=true;for(let j=1;j<5;j++){if((new Date(stats[i+j].date)-new Date(stats[i+j-1].date))/86400000>1.5){ok=false;break;}}if(ok)return true;}return false;},
+  // 5 blocks of 4 weeks = 20 weeks (140+ day span)
+  "cb4": d=>_trainingSpanDays(d)>=140,
+  // Combined bench + OHP + lateral raise >= 140kg in a single session
+  "cb5": d=>{for(const sk of Object.keys(d.workoutLogs||{}).filter(k=>!k.includes("_rpe"))){const dayNum=parseInt(sk.split("-")[0].replace("d",""));const logs=d.workoutLogs[sk]||{};const exes=SPLIT[dayNum-1]?.exercises||[];let b=0,o=0,l=0;exes.forEach((ex,ei)=>{const nm=ex.name.toLowerCase();for(let s=1;s<=5;s++){const w=parseFloat(logs[ei+"-"+s+"-weight"]||0);if(nm.includes("bench"))b=Math.max(b,w);if(nm.includes("overhead")||nm.includes("shoulder press"))o=Math.max(o,w);if(nm.includes("lateral"))l=Math.max(l,w);}});if(b+o+l>=140)return true;}return false;},
+  // Day 2 (Back & Triceps) with 3+ exercises showing progressive overload vs previous Day 2 session
+  "d3": d=>{const s2=Object.keys(d.workoutLogs||{}).filter(k=>k.startsWith("d2-")&&!k.includes("_rpe")).sort();for(let i=1;i<s2.length;i++){const cur=d.workoutLogs[s2[i]]||{},prv=d.workoutLogs[s2[i-1]]||{};const exes=SPLIT[1]?.exercises||[];let n=0;exes.forEach((_,ei)=>{let cw=0,pw=0;for(let s=1;s<=5;s++){cw=Math.max(cw,parseFloat(cur[ei+"-"+s+"-weight"]||0));pw=Math.max(pw,parseFloat(prv[ei+"-"+s+"-weight"]||0));}if(cw>pw&&pw>0)n++;});if(n>=3)return true;}return false;},
+  // 32+ workout sessions each with at least one Max RPE (approx 8 weeks of Max effort)
+  "d4": d=>Object.keys(d.workoutLogs||{}).filter(k=>k.includes("_rpe")).filter(k=>Object.values(d.workoutLogs[k]||{}).some(r=>r==="Max")).length>=32,
+  // 6 months training span
+  "d5": d=>_trainingSpanDays(d)>=180,
+  // Day 5 (Chest & Back) session with 4+ sets per exercise
+  "ar3": d=>Object.keys(d.workoutLogs||{}).filter(k=>k.startsWith("d5-")&&!k.includes("_rpe")).some(sk=>{const logs=d.workoutLogs[sk]||{};return(SPLIT[4]?.exercises||[]).every((_,ei)=>{let c=0;for(let s=1;s<=5;s++){if(parseFloat(logs[ei+"-"+s+"-weight"]||0)>0)c++;}return c>=4;});}),
+  // Bodyweight <= 75kg logged
+  "ar4": d=>(d.bodyStats||[]).some(s=>parseFloat(s.weight)<=75&&parseFloat(s.weight)>0),
+  // 12 consecutive weeks (84+ day span)
+  "ar5": d=>_trainingSpanDays(d)>=84,
+  // 8 consecutive months (240+ day span)
+  "ro5": d=>_trainingSpanDays(d)>=240,
+  // Any session volume >= 5000kg
+  "so4": d=>{for(const sk of Object.keys(d.workoutLogs||{}).filter(k=>!k.includes("_rpe"))){const logs=d.workoutLogs[sk]||{};let v=0;Object.keys(logs).forEach(k=>{if(k.endsWith("-weight")){const[ei,si]=k.split("-");v+=(parseFloat(logs[k])||0)*(parseInt(logs[ei+"-"+si+"-reps"])||0);}});if(v>=5000)return true;}return false;},
+  // 4 consecutive weeks training in winter months (Nov–Feb)
+  "so5": d=>{const wm=new Set([10,11,0,1]);const wdates=Object.keys(d.workoutLogs||{}).filter(k=>!k.includes("_rpe")).map(k=>k.replace(/^d\d+-/,"")).filter(dt=>wm.has(new Date(dt).getMonth())).sort();for(let i=0;i<wdates.length;i++){const s=new Date(wdates[i]);let c=0;for(let j=i;j<wdates.length;j++){if((new Date(wdates[j])-s)/86400000<=27)c++;else break;}if(c>=4)return true;}return false;},
+  // 6 months training span
+  "so7": d=>_trainingSpanDays(d)>=180,
+  // PB exists after deload was recommended
+  "so9": d=>d.deloadRecommended&&(d.pbs||[]).length>0,
+  // 52 weeks training span
+  "so12": d=>_trainingSpanDays(d)>=365,
+  // Saitama routine from rest day log: push-ups >= 100, sit-ups >= 100, steps >= 10000
+  "a1": d=>Object.values(d.restLogs||{}).some(rl=>parseFloat(rl.pushups||0)>=100&&parseFloat(rl.situps||0)>=100&&parseFloat(rl.steps||0)>=10000),
 };
+
+function _trainingSpanDays(d){const dates=Object.keys(d.workoutLogs||{}).filter(k=>!k.includes("_rpe")).map(k=>k.replace(/^d\d+-/,"")).sort();if(dates.length<2)return 0;return Math.round((new Date(dates[dates.length-1])-new Date(dates[0]))/86400000);}
 
 function checkAllChallenges(d){
   const newlyDone=[];
