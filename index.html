@@ -148,6 +148,19 @@ const MUSCLE_MAP={
   "Leg Press Wide":["Quads","Glutes"],"Walking Lunges":["Quads","Glutes"],"Seated Calf Raise":["Calves"]
 };
 
+const INJURY_EXERCISE_MAP={
+  'Lower Back':['Conventional Deadlift','Romanian Deadlift','Barbell Back Squat','Barbell Bent-Over Row','Single Arm DB Row','Seated Cable Row','Dumbbell Pullover'],
+  'Left Knee':['Barbell Back Squat','Romanian Deadlift','Lying Leg Curl','Leg Press Wide','Walking Lunges'],
+  'Right Knee':['Barbell Back Squat','Romanian Deadlift','Lying Leg Curl','Leg Press Wide','Walking Lunges'],
+  'Left Shoulder':['Barbell Bench Press','Incline Barbell Press','Flat DB Press','Incline DB Press','Barbell Overhead Press','DB Shoulder Press','DB Lateral Raise','Cable Lateral Raise','Seated DB Shoulder Press','Dumbbell Flye','Cable Crossover'],
+  'Right Shoulder':['Barbell Bench Press','Incline Barbell Press','Flat DB Press','Incline DB Press','Barbell Overhead Press','DB Shoulder Press','DB Lateral Raise','Cable Lateral Raise','Seated DB Shoulder Press','Dumbbell Flye','Cable Crossover'],
+  'Left Elbow':['EZ Bar Curl','Incline DB Curl','Hammer Curl Cable & Rope','Concentration Curls','Close Grip Bench Press (Smith)','Tricep Pushdown (Machine)','Overhead DB Extension','Cable Curl','Tricep Pushdown Cable'],
+  'Right Elbow':['EZ Bar Curl','Incline DB Curl','Hammer Curl Cable & Rope','Concentration Curls','Close Grip Bench Press (Smith)','Tricep Pushdown (Machine)','Overhead DB Extension','Cable Curl','Tricep Pushdown Cable'],
+  'Neck':['Barbell Shrugs','Barbell Overhead Press','Barbell Bench Press'],
+  'Hip':['Barbell Back Squat','Romanian Deadlift','Walking Lunges','Leg Press Wide','Conventional Deadlift']
+};
+const PR_TARGETS={'Barbell Bench Press':100,'Conventional Deadlift':180,'Barbell Back Squat':140,'Barbell Overhead Press':80,'Barbell Bent-Over Row':100};
+
 const CHALLENGES=[
   {id:"a1",cat:"Anime",tier:"Initiate",name:"Saitama's Warm Up",xp:350,desc:"Complete the One Punch Man daily routine once — 100 push-ups, 100 sit-ups, 100 squats, 10km run"},
   {id:"a2",cat:"Anime",tier:"Warrior",name:"Demon Back Awakening",xp:600,desc:"50 supinated inverted rows, 100 dragon flags or hollow body holds, 50 lateral raises in a single session"},
@@ -283,10 +296,12 @@ let state={
     workoutStreak:0,lastWorkoutDate:null,apiKey:"",exerciseOverrides:{},
     deloadRecommended:false,deloadPlan:null,deloadPlanDate:null,
     challengeTriggers:{},dailyBriefing:null,lastBriefingDate:null,
-    notifSettings:{workout:"",creatine:"",waterReminder:false}
+    notifSettings:{workout:"",creatine:"",waterReminder:false},
+    orm:{},measurements:[],weeklyReview:null,lastWeeklyReviewDate:null,
+    preSessBriefs:{},sessionNotes:{},injuries:[],customTemplates:[]
   },
   chat:{msgs:[{role:"assistant",text:"Gunther online. Legend Protocol V2.0 loaded. Ready when you are."}],input:"",loading:false},
-  workout:{showTargets:true,showHistory:false,showSuperset:false,editingExercise:null},
+  workout:{showTargets:true,showHistory:false,showSuperset:false,editingExercise:null,sessionFlowMode:false,sessionFlowExIdx:0,showTemplates:false},
   _todoPriority:"Normal",_calMonth:null,_calYear:null,_calSel:null,
   loaded:false
 };
@@ -679,8 +694,12 @@ function buildHome(workout,d){
     '<div class="card" style="padding:12px;margin-bottom:0;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:var(--mut)">WEIGHT</div><div style="font-size:22px;color:#4ade80;font-weight:700;margin-top:2px">'+(lw?lw.weight+"kg":"—")+'</div><div style="font-size:9px;color:var(--mut)">'+(lw?.date||"log it")+'</div></div>'+
     '<div class="card" style="padding:12px;margin-bottom:0;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:var(--mut)">WATER</div>'+buildWaterRing(todayWater,3000)+'</div>'+
   '</div>'+
+  // Training heatmap
+  '<div class="card"><div class="sec-title">TRAINING HEATMAP — 365 DAYS</div>'+buildHeatmap(d)+'</div>'+
   // Daily briefing
   (d.dailyBriefing?'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="sec-title" style="margin-bottom:0">GUNTHER\'S BRIEFING</div><button onclick="generateDailyBriefing()" style="background:none;border:none;color:var(--acc);cursor:pointer;font-size:10px;letter-spacing:1px">↻ REFRESH</button></div><div style="font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap">'+d.dailyBriefing+'</div></div>':'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="sec-title" style="margin-bottom:4px">GUNTHER\'S BRIEFING</div><div style="font-size:11px;color:var(--mut)">Auto-generated daily summary</div></div><button onclick="generateDailyBriefing()" class="btn" style="font-size:11px;padding:8px 14px">BRIEF ME</button></div></div>')+
+  // Weekly review
+  '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:'+(d.weeklyReview?"10":"0")+'px"><div class="sec-title" style="margin-bottom:0">WEEKLY REVIEW</div><button onclick="generateWeeklyReview()" style="font-size:10px;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid rgba(74,222,128,0.35);background:rgba(74,222,128,0.08);color:#4ade80;letter-spacing:1px">'+(d.weeklyReview?"↻ REFRESH":"GENERATE")+'</button></div>'+(d.weeklyReview?'<div style="font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap">'+d.weeklyReview+'</div><div style="font-size:10px;color:var(--mut);margin-top:6px">Generated: '+(d.lastWeeklyReviewDate||"")+'</div>':'<div style="font-size:11px;color:var(--mut);margin-top:8px">Get Gunther\'s take on your training week.</div>')+'</div>'+
   // Title selector
   (d.titles?.length?'<div class="card"><div class="sec-title">ACTIVE TITLE</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+d.titles.map(t=>'<button onclick="setActiveTitle(\''+t+'\')" style="padding:5px 12px;border-radius:10px;cursor:pointer;font-size:11px;border:1px solid '+(d.activeTitle===t?"#a855f7":"var(--card-b)")+';background:'+(d.activeTitle===t?"rgba(168,85,247,0.15)":"transparent")+';color:'+(d.activeTitle===t?"#a855f7":"var(--fg2)")+'">'+t+'</button>').join("")+'</div></div>':"")+
   // Quick Gunther
@@ -778,6 +797,8 @@ function buildWorkout(workout,d){
       '<button class="btn" onclick="toggleHistory()" style="padding:7px 12px;font-size:11px">📋 HISTORY</button>'+
       '<button class="btn" onclick="state.workout.showSuperset=!state.workout.showSuperset;render()" style="padding:7px 12px;font-size:11px">⚡ SUPERSET</button>'+
       '<button class="btn" onclick="state.workout.editingExercise=state.workout.editingExercise?null:\'menu\';render()" style="padding:7px 12px;font-size:11px;'+(state.workout.editingExercise?'background:rgba(74,222,128,0.2);border-color:#4ade80;':'')+'">✏️ EDIT SPLIT</button>'+
+      '<button class="btn" onclick="generatePreSessBrief()" style="padding:7px 12px;font-size:11px">🤖 BRIEF</button>'+
+      '<button class="btn" onclick="state.workout.showTemplates=!state.workout.showTemplates;render()" style="padding:7px 12px;font-size:11px;'+(state.workout.showTemplates?'background:rgba(74,222,128,0.2);border-color:#4ade80;':'')+'">📋 TEMPLATES</button>'+
     '</div>'+
     // Superset timer panel
     (state.workout.showSuperset?
@@ -796,6 +817,15 @@ function buildWorkout(workout,d){
         '<button onclick="startSuperset()" class="btn" style="background:rgba(249,115,22,0.15);border-color:#f97316;color:#f97316;font-size:11px;padding:8px 16px">▶ START SUPERSET</button>'+
       '</div>':"")+""
     html+='<div style="font-size:11px;color:var(--fg2);margin-bottom:16px;padding:10px;background:rgba(74,222,128,0.05);border-radius:6px">🔥 <b>Warmup:</b> '+(workout?.warmup||"")+'</div>';
+    // Pre-session brief
+    const preBriefKey='d'+state.currentDay+"-"+today;
+    const preBrief=d.preSessBriefs?.[preBriefKey];
+    if(preBrief)html+='<div style="margin-bottom:14px;padding:12px;background:rgba(74,222,128,0.06);border-radius:8px;border:1px solid rgba(74,222,128,0.25)"><div style="font-size:9px;letter-spacing:3px;color:#4ade80;margin-bottom:6px">🤖 GUNTHER\'S PRE-SESSION BRIEF</div><div style="font-size:12px;color:var(--fg2);line-height:1.6">'+preBrief+'</div></div>';
+    // Template panel
+    if(state.workout.showTemplates)html+='<div style="margin-bottom:14px">'+buildTemplateSection(d)+'</div>';
+    // Session note
+    const sessNoteVal=d.sessionNotes?.[preBriefKey]||"";
+    html+='<div style="margin-bottom:14px;padding:12px;background:rgba(74,222,128,0.03);border-radius:8px;border:1px solid var(--card-b)"><div style="font-size:9px;letter-spacing:3px;color:var(--mut);margin-bottom:7px">📝 SESSION NOTES</div><textarea id="sess-note" class="inp" rows="2" placeholder="How did this session feel? Any notes for next time..." style="resize:vertical;height:60px;font-size:12px;margin-bottom:8px">'+sessNoteVal+'</textarea><button onclick="saveSessionNote()" style="font-size:10px;padding:4px 12px;border-radius:5px;cursor:pointer;border:1px solid rgba(74,222,128,0.35);background:rgba(74,222,128,0.08);color:#4ade80;letter-spacing:1px">SAVE NOTE</button></div>';
 
     // Session History
     if(state.workout.showHistory){
@@ -810,6 +840,14 @@ function buildWorkout(workout,d){
       '</div>';
     }
 
+    const activeInjuries=(d.injuries||[]).filter(i=>i.active);
+    if(activeInjuries.length){
+      const warnedExeSet=new Set();activeInjuries.forEach(i=>{(INJURY_EXERCISE_MAP[i.area]||[]).forEach(e=>warnedExeSet.add(e));});
+      const todayExNames=(workout?.exercises||[]).map(e=>e.name);
+      const flagged=todayExNames.filter(n=>warnedExeSet.has(n));
+      if(flagged.length)html+='<div style="margin-bottom:12px;padding:10px;background:rgba(250,204,21,0.06);border-radius:7px;border:1px solid rgba(250,204,21,0.3)"><div style="font-size:9px;letter-spacing:2px;color:#facc15;margin-bottom:5px">⚡ INJURY WARNING</div><div style="font-size:11px;color:var(--fg2)">Modify or skip: '+flagged.join(", ")+'</div></div>';
+    }
+
     (workout?.exercises||[]).map((baseEx,ei)=>{const ov=d.exerciseOverrides?.[state.currentDay+"-"+ei];return ov?{...baseEx,...ov}:baseEx;}).forEach((ex,ei)=>{
       const editKey=state.currentDay+"-"+ei;
       const isEditing=state.workout.editingExercise===editKey;
@@ -819,9 +857,10 @@ function buildWorkout(workout,d){
       const target=getTarget(ex.name,ex.type,history);
       const curRpe=rpe[ei];
       const sparkPts=history.slice(-6).map((h,i)=>({x:h.date?h.date.slice(5):"",y:parseFloat(h.weight)||0}));
-      html+='<div style="margin-bottom:20px;padding:14px;background:rgba(74,222,128,0.04);border-radius:8px;border:1px solid '+(hasOverride?"rgba(74,222,128,0.4)":"rgba(74,222,128,0.1)")+'">'+
+      const injFlagged=activeInjuries.some(i=>(INJURY_EXERCISE_MAP[i.area]||[]).includes(ex.name));
+      html+='<div style="margin-bottom:20px;padding:14px;background:rgba(74,222,128,0.04);border-radius:8px;border:1px solid '+(injFlagged?"rgba(250,204,21,0.4)":hasOverride?"rgba(74,222,128,0.4)":"rgba(74,222,128,0.1)")+'">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
-          '<div style="font-size:14px;font-weight:700;color:var(--fg)">'+ex.name+(hasOverride?' <span style="font-size:9px;color:#4ade80;letter-spacing:1px">CUSTOM</span>':'')+'</div>'+
+          '<div style="font-size:14px;font-weight:700;color:var(--fg)">'+ex.name+(hasOverride?' <span style="font-size:9px;color:#4ade80;letter-spacing:1px">CUSTOM</span>':'')+(injFlagged?' <span style="font-size:9px;color:#facc15;letter-spacing:1px">⚡ MODIFY</span>':'')+'</div>'+
           (state.workout.editingExercise?'<button onclick="state.workout.editingExercise=\''+editKey+'\';render()" style="background:none;border:1px solid rgba(74,222,128,0.4);border-radius:5px;color:#4ade80;font-size:10px;padding:3px 8px;cursor:pointer">'+(isEditing?"▲ CLOSE":"✏️ SWAP")+'</button>':"")+
         '</div>'+
         (isEditing?'<div style="margin-bottom:12px;padding:12px;background:rgba(74,222,128,0.06);border-radius:7px;border:1px solid rgba(74,222,128,0.25)">'+
@@ -896,15 +935,18 @@ function buildPBs(d){
     '</div>'+
     (orm?'<div style="text-align:center;padding:10px;background:rgba(74,222,128,0.1);border-radius:8px"><div style="font-size:10px;letter-spacing:3px;color:var(--mut)">ESTIMATED 1RM</div><div style="font-size:36px;font-weight:700;color:#4ade80">'+orm+'kg</div></div>':'<div style="font-size:11px;color:var(--mut);text-align:center">Enter weight and reps above</div>')+
   '</div>'+
+  buildPRPredictor(d)+
   Object.entries(grouped).map(([lift,entries])=>{
     const best=entries.reduce((a,b)=>parseFloat(a.weight)>parseFloat(b.weight)?a:b);
     const sparkPts=[...entries].sort((a,b)=>new Date(a.date)-new Date(b.date)).slice(-8).map(e=>({x:e.date?e.date.slice(0,5):"",y:parseFloat(e.weight)||0}));
+    const ormHist=(d.orm?.[lift]||[]).slice(-8);
     return'<div class="card">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'+
         '<div style="font-size:14px;font-weight:700;color:var(--fg)">'+lift+'</div>'+
         '<div style="text-align:right"><div style="font-size:22px;color:#4ade80;font-weight:700">'+best.weight+'kg</div><div style="font-size:10px;color:var(--mut)">× '+best.reps+' — BEST</div></div>'+
       '</div>'+
       (sparkPts.length>=2?buildScatterChart(sparkPts,"#4ade80",90):"")+
+      (ormHist.length>=2?'<div style="margin-top:8px;margin-bottom:4px"><div style="font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:4px">AUTO 1RM TRACKING</div>'+buildSvgLineChart(ormHist.map(e=>({x:e.date?e.date.slice(5):"",y:e.orm})),"#a855f7",40)+'</div>':"")+
       [...entries].reverse().map(e=>'<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--card-b);font-size:12px"><span style="color:var(--fg2)">'+e.date+'</span><span style="color:var(--fg)">'+e.weight+'kg × '+e.reps+'</span><span style="color:var(--mut)">'+e.season+'</span></div>').join("")+
     '</div>';
   }).join("")+
@@ -945,24 +987,30 @@ function buildSleep(d){
 }
 
 function buildBody(d){
+  const sec=state._bodySection||"Stats";
   const stats=[...(d.bodyStats||[])].reverse();
   const latest=stats[0],prev=stats[1];
   const diff=latest&&prev?(latest.weight-prev.weight).toFixed(1):null;
   const chartPts=[...stats].reverse().slice(-12).map(s=>({x:s.date?s.date.slice(0,5):"",y:s.weight}));
+  const tabs=["Stats","Measurements","Injuries"];
   return'<div style="padding:16px">'+
-  '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'+
-    '<div class="card" style="padding:14px;margin-bottom:0;text-align:center"><div style="font-size:9px;letter-spacing:3px;color:var(--mut)">CURRENT</div><div style="font-size:30px;color:#4ade80;font-weight:700">'+(latest?.weight||"—")+'<span style="font-size:13px">kg</span></div>'+(diff?'<div style="font-size:11px;color:'+(parseFloat(diff)>0?"#ef4444":"#4ade80")+'">'+(parseFloat(diff)>0?"+":"")+diff+'kg</div>':"")+
+  '<div style="display:flex;gap:8px;margin-bottom:14px">'+tabs.map(t=>'<button onclick="state._bodySection=\''+t+'\';render()" style="flex:1;padding:8px;border-radius:7px;cursor:pointer;border:1px solid '+(sec===t?"#4ade80":"var(--card-b)")+';background:'+(sec===t?"rgba(74,222,128,0.15)":"transparent")+';color:'+(sec===t?"#4ade80":"var(--fg2)")+';font-size:11px;letter-spacing:1px;font-weight:700">'+t.toUpperCase()+'</button>').join("")+'</div>'+
+  (sec==="Stats"?
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'+
+      '<div class="card" style="padding:14px;margin-bottom:0;text-align:center"><div style="font-size:9px;letter-spacing:3px;color:var(--mut)">CURRENT</div><div style="font-size:30px;color:#4ade80;font-weight:700">'+(latest?.weight||"—")+'<span style="font-size:13px">kg</span></div>'+(diff?'<div style="font-size:11px;color:'+(parseFloat(diff)>0?"#ef4444":"#4ade80")+'">'+(parseFloat(diff)>0?"+":"")+diff+'kg</div>':"")+
+      '</div>'+
+      '<div class="card" style="padding:14px;margin-bottom:0;text-align:center"><div style="font-size:9px;letter-spacing:3px;color:var(--mut)">BODY FAT</div><div style="font-size:30px;color:#4ade80;font-weight:700">'+(latest?.bf||"—")+'<span style="font-size:13px">%</span></div></div>'+
     '</div>'+
-    '<div class="card" style="padding:14px;margin-bottom:0;text-align:center"><div style="font-size:9px;letter-spacing:3px;color:var(--mut)">BODY FAT</div><div style="font-size:30px;color:#4ade80;font-weight:700">'+(latest?.bf||"—")+'<span style="font-size:13px">%</span></div></div>'+
-  '</div>'+
-  (chartPts.length>=2?'<div class="card"><div class="sec-title">BODYWEIGHT TREND</div>'+buildSvgLineChart(chartPts,"#4ade80",80)+'</div>':"")+
-  '<div class="card"><div class="sec-title">LOG STATS</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><input class="inp" id="b-weight" type="number" placeholder="Weight (kg)"><input class="inp" id="b-bf" type="number" placeholder="Body fat %"></div>'+
-    '<input class="inp" id="b-note" placeholder="Notes" style="margin-bottom:10px">'+
-    '<button class="btn" onclick="addBodyStat()">LOG STATS 📊</button>'+
-  '</div>'+
-  (stats.length?'<div class="card"><div class="sec-title">HISTORY</div>'+stats.map(s=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--card-b);font-size:12px"><span style="color:var(--fg2)">'+s.date+'</span><span style="color:#4ade80;font-weight:700">'+s.weight+'kg</span>'+(s.bf?'<span style="color:var(--mut)">'+s.bf+'% BF</span>':"")+
-  '</div>').join("")+'</div>':"")+
+    (chartPts.length>=2?'<div class="card"><div class="sec-title">BODYWEIGHT TREND</div>'+buildSvgLineChart(chartPts,"#4ade80",80)+'</div>':"")+
+    '<div class="card"><div class="sec-title">LOG STATS</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"><input class="inp" id="b-weight" type="number" placeholder="Weight (kg)"><input class="inp" id="b-bf" type="number" placeholder="Body fat %"></div>'+
+      '<input class="inp" id="b-note" placeholder="Notes" style="margin-bottom:10px">'+
+      '<button class="btn" onclick="addBodyStat()">LOG STATS 📊</button>'+
+    '</div>'+
+    (stats.length?'<div class="card"><div class="sec-title">HISTORY</div>'+stats.map(s=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--card-b);font-size:12px"><span style="color:var(--fg2)">'+s.date+'</span><span style="color:#4ade80;font-weight:700">'+s.weight+'kg</span>'+(s.bf?'<span style="color:var(--mut)">'+s.bf+'% BF</span>':"")+
+    '</div>').join("")+'</div>':"")
+  :sec==="Measurements"?buildMeasurementsSection(d)
+  :buildInjurySection(d))+
   '</div>';
 }
 
@@ -1337,6 +1385,7 @@ function setRPE(ei,rpe){
     if(idx>=0)hist[idx]=entry;else hist.push(entry);
     if(hist.length>12)hist=hist.slice(-12);
     state.data.exerciseHistory[exKey]=hist;
+    if(bw&&br)trackORM(state.data,ex.name,bw,br);
   }
   // Check if all exercises rated → award session XP
   const allExes=SPLIT[(state.currentDay-1)%8]?.exercises||[];
@@ -1709,6 +1758,228 @@ function startSuperset(){
   startTimer(rest,exA+" SET 1 → rest → "+exB);
   state.timer.label=exA+" → SET 1";
   render();
+}
+
+// ── 1RM UTILITY ──────────────────────────────────────────────────
+function calcORM(w,r){return Math.round(parseFloat(w)*(1+parseInt(r)/30)*10)/10;}
+function trackORM(d,exName,w,r){
+  if(!w||!r)return;
+  const orm=calcORM(w,r);if(!orm)return;
+  if(!d.orm[exName])d.orm[exName]=[];
+  const today=new Date().toISOString().split("T")[0];
+  const idx=d.orm[exName].findIndex(e=>e.date===today);
+  if(idx>=0){if(orm>d.orm[exName][idx].orm)d.orm[exName][idx]={date:today,orm,w,r};}
+  else d.orm[exName].push({date:today,orm,w,r});
+  if(d.orm[exName].length>30)d.orm[exName]=d.orm[exName].slice(-30);
+}
+
+// ── MEASUREMENTS ─────────────────────────────────────────────────
+function addMeasurement(){
+  const chest=document.getElementById("ms-chest")?.value;
+  const waist=document.getElementById("ms-waist")?.value;
+  const arms=document.getElementById("ms-arms")?.value;
+  const thighs=document.getElementById("ms-thighs")?.value;
+  if(!chest&&!waist&&!arms&&!thighs)return;
+  state.data.measurements.push({date:new Date().toLocaleDateString("en-GB"),ts:Date.now(),chest:chest?parseFloat(chest):null,waist:waist?parseFloat(waist):null,arms:arms?parseFloat(arms):null,thighs:thighs?parseFloat(thighs):null});
+  saveData();awardXP(8,"Measurements Logged");render();
+}
+function deleteMeasurement(ts){state.data.measurements=state.data.measurements.filter(m=>m.ts!==ts);saveData();render();}
+
+// ── INJURIES ─────────────────────────────────────────────────────
+function addInjury(){
+  const area=document.getElementById("inj-area")?.value;
+  const sev=document.getElementById("inj-sev")?.value;
+  const note=document.getElementById("inj-note")?.value||"";
+  if(!area||!sev)return;
+  state.data.injuries.push({id:Date.now(),area,severity:parseInt(sev),note,date:new Date().toLocaleDateString("en-GB"),active:true});
+  saveData();render();
+}
+function deleteInjury(id){state.data.injuries=state.data.injuries.filter(i=>i.id!==id);saveData();render();}
+function toggleInjury(id){state.data.injuries=state.data.injuries.map(i=>i.id===id?{...i,active:!i.active}:i);saveData();render();}
+
+// ── SESSION NOTES ─────────────────────────────────────────────────
+function saveSessionNote(){
+  const today=new Date().toISOString().split("T")[0];
+  const key='d'+state.currentDay+"-"+today;
+  const note=document.getElementById("sess-note")?.value||"";
+  if(!note.trim())return;
+  state.data.sessionNotes[key]=note;
+  saveData();showToast("Note saved");render();
+}
+
+// ── TEMPLATES ─────────────────────────────────────────────────────
+function saveTemplate(){
+  const name=document.getElementById("tmpl-name")?.value?.trim();
+  const exes=document.getElementById("tmpl-exes")?.value?.trim();
+  if(!name||!exes)return;
+  const exercises=exes.split("\n").map(l=>l.trim()).filter(Boolean).map(l=>{const parts=l.split("|");return{name:parts[0]?.trim()||l,sets:parts[1]?.trim()||"3",reps:parts[2]?.trim()||"8-12",tempo:parts[3]?.trim()||"2-0-2",rest:parts[4]?.trim()||"90s",notes:parts[5]?.trim()||""};});
+  if(!exercises.length)return;
+  state.data.customTemplates.push({id:Date.now(),name,exercises,created:new Date().toLocaleDateString("en-GB")});
+  saveData();render();
+}
+function deleteTemplate(id){state.data.customTemplates=state.data.customTemplates.filter(t=>t.id!==id);saveData();render();}
+
+// ── WEEKLY AI REVIEW ──────────────────────────────────────────────
+async function generateWeeklyReview(){
+  if(!state.data.apiKey){showToast("Set API key in Chat tab first");return;}
+  const d=state.data;
+  const today=new Date();
+  const weekStart=new Date(today);weekStart.setDate(today.getDate()-6);
+  const weekDates=[];for(let i=0;i<7;i++){const dt=new Date(weekStart);dt.setDate(weekStart.getDate()+i);weekDates.push(dt.toISOString().split("T")[0]);}
+  const sessions=Object.entries(d.workoutLogs||{}).filter(([k])=>!k.includes("_rpe")&&weekDates.some(dt=>k.includes(dt))).length;
+  const avgSleep=weekDates.map(dt=>(d.sleep||[]).find(s=>s.date===new Date(dt).toLocaleDateString("en-GB"))?.hours).filter(Boolean);
+  const avgSlpVal=avgSleep.length?(avgSleep.reduce((a,b)=>a+b,0)/avgSleep.length).toFixed(1):null;
+  const newPBs=(d.pbs||[]).filter(p=>weekDates.some(dt=>p.date===new Date(dt).toLocaleDateString("en-GB"))).map(p=>p.lift+" "+p.weight+"kg x"+p.reps);
+  const lv=getLevel(d.xp||0);
+  const ctx="Week: "+weekStart.toLocaleDateString("en-GB")+" to "+today.toLocaleDateString("en-GB")+"\nSessions: "+sessions+"/5\nAvg sleep: "+(avgSlpVal||"not logged")+"h\nNew PBs: "+(newPBs.join(", ")||"none")+"\nXP: "+(d.xp||0)+" ("+lv.name+")\nStreak: "+(d.workoutStreak||0)+" days\nDeload needed: "+(checkDeloadNeeded(d)?"YES":"No");
+  showToast("Generating weekly review...");
+  try{
+    const text=await callGunther("You are Gunther. Give a sharp, honest weekly review. What went well, what needs work, one specific focus for next week. 4-5 sentences. Direct, no fluff.",[{role:"user",text:"Weekly review:\n"+ctx}],400);
+    state.data.weeklyReview=text;
+    state.data.lastWeeklyReviewDate=today.toISOString().split("T")[0];
+    saveData();render();
+  }catch(e){showToast("Connection failed");}
+}
+
+// ── PRE-SESSION BRIEF ─────────────────────────────────────────────
+async function generatePreSessBrief(){
+  if(!state.data.apiKey){showToast("Set API key in Chat tab first");return;}
+  const d=state.data;
+  const today=new Date().toISOString().split("T")[0];
+  const key='d'+state.currentDay+"-"+today;
+  const workout=SPLIT[(state.currentDay-1)%8];
+  const lastSleep=d.sleep?.slice(-1)[0];
+  const stalled=getStalledExercises(d).filter(s=>workout?.exercises?.some(e=>e.name===s));
+  const activeInj=(d.injuries||[]).filter(i=>i.active).map(i=>i.area+" ("+i.severity+"/5)");
+  const ctx="Day "+state.currentDay+": "+(workout?.label||"Rest Day")+"\nExercises: "+(workout?.exercises?.map(e=>e.name).join(", ")||"none")+"\nLast sleep: "+(lastSleep?.hours||"?")+"h ("+( lastSleep?.quality||"?")+")"+"\nActive injuries: "+(activeInj.join(", ")||"none")+"\nStalling: "+(stalled.join(", ")||"none")+"\nStreak: "+(d.workoutStreak||0)+" days";
+  showToast("Gunther is prepping your brief...");
+  try{
+    const text=await callGunther("You are Gunther. Give a sharp pre-session brief. What to focus on, what to push, what to be careful about given injuries/fatigue. 3-4 sentences max. Energetic and direct.",[{role:"user",text:"Pre-session brief:\n"+ctx}],300);
+    state.data.preSessBriefs[key]=text;
+    saveData();render();
+  }catch(e){showToast("Connection failed");}
+}
+
+// ── TRAINING HEATMAP ──────────────────────────────────────────────
+function buildHeatmap(d){
+  const today=new Date();
+  const days=[];
+  for(let i=364;i>=0;i--){const dt=new Date(today);dt.setDate(today.getDate()-i);days.push(dt.toISOString().split("T")[0]);}
+  const trainSet=new Set(Object.keys(d.workoutLogs||{}).filter(k=>!k.includes("_rpe")).map(k=>k.replace(/^d\d+-/,"")));
+  const restSet=new Set(Object.keys(d.restLogs||{}));
+  const firstDay=new Date(days[0]);
+  const padBefore=firstDay.getDay();
+  const all=Array(padBefore).fill(null).concat(days);
+  const weeks=[];
+  for(let i=0;i<all.length;i+=7)weeks.push(all.slice(i,i+7));
+  const cs=10,g=2;
+  const svgW=weeks.length*(cs+g);
+  const svgH=7*(cs+g);
+  let cells="";
+  weeks.forEach((week,wi)=>{
+    week.forEach((day,di)=>{
+      if(!day){cells+='<rect x="'+(wi*(cs+g))+'" y="'+(di*(cs+g))+'" width="'+cs+'" height="'+cs+'" rx="2" fill="rgba(74,222,128,0.06)"/>';return;}
+      const trained=trainSet.has(day);const rest=restSet.has(day);
+      const fill=trained?"rgba(74,222,128,0.85)":rest?"rgba(74,222,128,0.3)":"rgba(74,222,128,0.06)";
+      cells+='<rect x="'+(wi*(cs+g))+'" y="'+(di*(cs+g))+'" width="'+cs+'" height="'+cs+'" rx="2" fill="'+fill+'"/>';
+    });
+  });
+  const trained365=days.filter(d2=>trainSet.has(d2)).length;
+  const rest365=days.filter(d2=>restSet.has(d2)).length;
+  return'<svg viewBox="0 0 '+svgW+' '+svgH+'" style="width:100%;height:auto">'+cells+'</svg>'+
+    '<div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:var(--mut)">'+
+    '<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:rgba(74,222,128,0.85);vertical-align:middle;margin-right:4px"></span>Trained ('+trained365+')</span>'+
+    '<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:rgba(74,222,128,0.3);vertical-align:middle;margin-right:4px"></span>Rest ('+rest365+')</span>'+
+    '</div>';
+}
+
+// ── BODY MEASUREMENTS BUILD ───────────────────────────────────────
+function buildMeasurementsSection(d){
+  const recent=[...(d.measurements||[])].reverse().slice(0,10);
+  const latest=recent[0];
+  const sites=["chest","waist","arms","thighs"];
+  const labels={chest:"Chest",waist:"Waist",arms:"Arms",thighs:"Thighs"};
+  return'<div class="card"><div class="sec-title">LOG MEASUREMENTS</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+      sites.map(s=>'<div><div style="font-size:10px;color:var(--mut);margin-bottom:3px">'+labels[s]+' (cm)</div><input class="inp" id="ms-'+s+'" type="number" placeholder="'+labels[s]+'..."'+( latest&&latest[s]?' value="'+latest[s]+'"':"")+' style="font-size:12px"></div>').join("")+
+    '</div>'+
+    '<button class="btn" onclick="addMeasurement()">LOG MEASUREMENTS 📐</button>'+
+  '</div>'+
+  (recent.length>=2?
+    '<div class="card"><div class="sec-title">MEASUREMENT TRENDS</div>'+
+      sites.filter(s=>recent.some(r=>r[s])).map(s=>{
+        const pts=[...recent].reverse().filter(r=>r[s]).map(r=>({x:r.date?r.date.slice(0,5):"",y:r[s]}));
+        if(pts.length<2)return"";
+        const diff=pts[pts.length-1].y-pts[0].y;
+        return'<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--fg2)">'+labels[s]+'</span><span style="font-size:11px;color:'+(diff===0?"var(--mut)":diff<0?"#4ade80":"#ef4444")+'">'+(diff>0?"+":"")+diff.toFixed(1)+'cm</span></div>'+buildSvgLineChart(pts,"#a855f7",50)+'</div>';
+      }).join("")+
+    '</div>':"")+
+  (recent.length?'<div class="card"><div class="sec-title">MEASUREMENT HISTORY</div>'+
+    recent.map(m=>'<div style="padding:7px 0;border-top:1px solid var(--card-b)"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:11px;color:var(--fg2)">'+m.date+'</span><button onclick="deleteMeasurement('+m.ts+')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:12px">×</button></div>'+
+      '<div style="display:flex;gap:12px;flex-wrap:wrap">'+sites.filter(s=>m[s]).map(s=>'<span style="font-size:11px;color:var(--fg)">'+labels[s]+': <b style="color:#a855f7">'+m[s]+'cm</b></span>').join("")+'</div>'+
+    '</div>').join("")+'</div>':"");
+}
+
+// ── INJURY TRACKER BUILD ──────────────────────────────────────────
+function buildInjurySection(d){
+  const injuries=d.injuries||[];
+  const areas=["Lower Back","Left Knee","Right Knee","Left Shoulder","Right Shoulder","Left Elbow","Right Elbow","Neck","Hip","Other"];
+  const active=injuries.filter(i=>i.active);
+  const warnedExes=new Set();
+  active.forEach(i=>{(INJURY_EXERCISE_MAP[i.area]||[]).forEach(e=>warnedExes.add(e));});
+  return'<div class="card"><div class="sec-title">LOG INJURY / PAIN</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
+      '<select id="inj-area" class="inp" style="font-size:12px">'+areas.map(a=>'<option>'+a+'</option>').join("")+'</select>'+
+      '<select id="inj-sev" class="inp" style="font-size:12px">'+[1,2,3,4,5].map(n=>'<option value="'+n+'">Severity '+n+(n===1?" (mild)":n===5?" (severe)":"")+'</option>').join("")+'</select>'+
+    '</div>'+
+    '<input class="inp" id="inj-note" placeholder="Notes (movement, when, how...)" style="margin-bottom:10px;font-size:12px">'+
+    '<button class="btn" onclick="addInjury()">LOG INJURY ⚠️</button>'+
+  '</div>'+
+  (active.length?'<div class="card" style="border-color:rgba(239,68,68,0.4)"><div style="font-size:10px;letter-spacing:3px;color:#ef4444;margin-bottom:10px">⚠️ ACTIVE ISSUES ('+active.length+')</div>'+
+    active.map(i=>'<div style="padding:8px;border-radius:6px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:13px;font-weight:700;color:var(--fg)">'+i.area+'</span><div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;color:#ef4444">'+("●".repeat(i.severity))+'<span style="color:rgba(239,68,68,0.3)">'+("●".repeat(5-i.severity))+'</span></span><button onclick="toggleInjury('+i.id+')" style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#4ade80;cursor:pointer">HEALED</button><button onclick="deleteInjury('+i.id+')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px">×</button></div></div>'+
+    (i.note?'<div style="font-size:11px;color:var(--fg2);font-style:italic">'+i.note+'</div>':"")+
+    '<div style="font-size:10px;color:var(--mut);margin-top:4px">Since '+i.date+'</div>'+
+    ((INJURY_EXERCISE_MAP[i.area]||[]).length?'<div style="font-size:10px;color:#facc15;margin-top:4px">⚡ Avoid/modify: '+(INJURY_EXERCISE_MAP[i.area]||[]).slice(0,4).join(", ")+'</div>':"")+
+    '</div>').join("")+
+  '</div>':"")+
+  (injuries.filter(i=>!i.active).length?'<div class="card"><div class="sec-title" style="color:var(--mut)">RESOLVED</div>'+injuries.filter(i=>!i.active).map(i=>'<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--card-b);font-size:11px;opacity:0.6"><span style="color:var(--fg)">'+i.area+'</span><span style="color:#4ade80">✓ Healed</span><span style="color:var(--mut)">'+i.date+'</span><button onclick="deleteInjury('+i.id+')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:11px">×</button></div>').join("")+'</div>':"")+
+  (warnedExes.size?'<div class="card" style="border-color:rgba(250,204,21,0.4)"><div style="font-size:10px;letter-spacing:2px;color:#facc15;margin-bottom:8px">⚡ EXERCISES TO MODIFY</div>'+[...warnedExes].map(e=>'<div style="font-size:12px;color:var(--fg2);padding:4px 0;border-top:1px solid var(--card-b)">'+e+'</div>').join("")+'</div>':"");
+}
+
+// ── TEMPLATE BUILD ────────────────────────────────────────────────
+function buildTemplateSection(d){
+  const templates=d.customTemplates||[];
+  return'<div class="card"><div class="sec-title">CREATE TEMPLATE</div>'+
+    '<input class="inp" id="tmpl-name" placeholder="Template name..." style="margin-bottom:8px;font-size:13px">'+
+    '<div style="font-size:10px;color:var(--mut);margin-bottom:6px">One exercise per line: Name | Sets | Reps | Tempo | Rest | Notes</div>'+
+    '<textarea id="tmpl-exes" class="inp" rows="5" placeholder="Barbell Bench Press | 4 | 6-8 | 2-0-1 | 120s | Keep it tight&#10;Incline DB Press | 3 | 8-12 | 2-0-2 | 90s" style="font-size:11px;height:100px;resize:vertical;font-family:monospace"></textarea>'+
+    '<button class="btn" onclick="saveTemplate()" style="margin-top:10px">SAVE TEMPLATE 📋</button>'+
+  '</div>'+
+  (templates.length?
+    templates.map(t=>'<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div><div style="font-size:14px;font-weight:700;color:var(--fg)">'+t.name+'</div><div style="font-size:10px;color:var(--mut)">'+t.created+' · '+t.exercises.length+' exercises</div></div><button onclick="deleteTemplate('+t.id+')" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:14px;margin-top:2px">×</button></div>'+
+    t.exercises.map(e=>'<div style="font-size:12px;color:var(--fg2);padding:4px 0;border-top:1px solid var(--card-b)"><span style="color:var(--fg);font-weight:600">'+e.name+'</span> — '+e.sets+' sets × '+e.reps+'</div>').join("")+
+    '</div>').join("")
+  :'<div style="text-align:center;padding:20px;color:var(--mut);font-size:12px">No templates yet.<br>Create one above to save a custom workout.</div>');
+}
+
+// ── PR PREDICTOR BUILD ────────────────────────────────────────────
+function buildPRPredictor(d){
+  const tracked=Object.entries(PR_TARGETS);
+  if(!tracked.length)return"";
+  const rows=tracked.map(([lift,target])=>{
+    const hist=Object.entries(d.exerciseHistory||{}).filter(([k])=>k.toLowerCase().includes(lift.toLowerCase())).flatMap(([,h])=>h).filter(h=>h.weight&&h.reps).sort((a,b)=>new Date(a.date)-new Date(b.date));
+    if(hist.length<2)return'<div style="display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--card-b);font-size:12px"><span style="color:var(--fg2)">'+lift+'</span><span style="color:var(--mut)">Not enough data</span><span style="color:#4ade80">Target: '+target+'kg</span></div>';
+    const orms=hist.map(h=>({date:h.date,orm:calcORM(h.weight,h.reps)}));
+    const latest=orms[orms.length-1];const oldest=orms[0];
+    const daysDiff=Math.max(1,Math.round((new Date(latest.date)-new Date(oldest.date))/86400000));
+    const progressPerWeek=((latest.orm-oldest.orm)/daysDiff)*7;
+    const remaining=target-latest.orm;
+    const weeksLeft=progressPerWeek>0?Math.ceil(remaining/progressPerWeek):null;
+    const eta=weeksLeft&&weeksLeft>0&&weeksLeft<200?weeksLeft+" wks":"On track"+(remaining<=0?" ✓":"");
+    const color=remaining<=0?"#4ade80":progressPerWeek>0?"#facc15":"#ef4444";
+    return'<div style="padding:9px 0;border-top:1px solid var(--card-b)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px"><span style="font-size:12px;font-weight:600;color:var(--fg)">'+lift+'</span><span style="font-size:11px;color:'+color+'">'+eta+'</span></div><div style="display:flex;gap:12px"><span style="font-size:11px;color:var(--fg2)">1RM: <b style="color:#4ade80">'+latest.orm+'kg</b></span><span style="font-size:11px;color:var(--fg2)">Target: <b style="color:#facc15">'+target+'kg</b></span><span style="font-size:11px;color:var(--fg2)">Rate: <b style="color:var(--fg)">'+(progressPerWeek>0?"+":"")+progressPerWeek.toFixed(1)+'kg/wk</b></span></div></div>';
+  });
+  return'<div class="card"><div class="sec-title">PR PREDICTOR</div>'+rows.join("")+'</div>';
 }
 
 // ── DAILY BRIEFING ───────────────────────────────────────────────
