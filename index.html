@@ -314,7 +314,7 @@ let state={
     challengeTriggers:{},dailyBriefing:null,lastBriefingDate:null,
     notifSettings:{workout:"",creatine:"",waterReminder:false},
     orm:{},measurements:[],weeklyReview:null,lastWeeklyReviewDate:null,
-    preSessBriefs:{},sessionNotes:{},injuries:[],customTemplates:[],bossNotifCycle:{minor:0,major:0,raid:0},
+    preSessBriefs:{},sessionNotes:{},injuries:[],customTemplates:[],bossNotifCycle:{minor:0,major:0,raid:0},bossActiveFights:{minor:null,major:null,raid:null},
     habits:[],habitLogs:{}
   },
   chat:{msgs:[{role:"assistant",text:"Gunther online. Legend Protocol V2.0 loaded. Ready when you are."}],input:"",loading:false},
@@ -1236,24 +1236,26 @@ function buildChallenges(d){
   // Boss Fight System
   (()=>{
     const cy=getBossCycles(d);
+    const af=d.bossActiveFights||{minor:null,major:null,raid:null};
     const typeInfo={minor:{label:"MINOR",col:"#4ade80",weeks:4},major:{label:"MAJOR",col:"#f97316",weeks:8},raid:{label:"RAID",col:"#ef4444",weeks:12}};
-    // Progress timeline
     const maxWk=Math.max(cy.weeks+4,12);
     const pct=Math.min(cy.weeks/maxWk*100,100);
-    let timelineHtml='<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:10px;color:var(--fg2)">Training weeks: <b style="color:#4ade80">'+cy.weeks+'</b></span></div>'+
-      '<div style="position:relative;height:8px;background:rgba(74,222,128,0.1);border-radius:4px;margin-bottom:8px">'+
+    const timelineHtml='<div style="margin-bottom:16px">'+
+      '<div style="font-size:10px;color:var(--fg2);margin-bottom:6px">Training weeks: <b style="color:#4ade80">'+cy.weeks+'</b></div>'+
+      '<div style="position:relative;height:8px;background:rgba(74,222,128,0.1);border-radius:4px;margin-bottom:10px">'+
         '<div style="position:absolute;left:0;top:0;height:100%;width:'+pct+'%;background:linear-gradient(90deg,#4ade80,#86efac);border-radius:4px"></div>'+
-        [4,8,12].map(w=>'<div style="position:absolute;top:-3px;left:'+Math.min(w/maxWk*100,100)+'%;width:2px;height:14px;background:rgba(255,255,255,0.3);transform:translateX(-50%)"></div>').join("")+
+        [4,8,12].map(w=>'<div style="position:absolute;top:-3px;left:'+Math.min(w/maxWk*100,100)+'%;width:2px;height:14px;background:rgba(255,255,255,0.25);transform:translateX(-50%)"></div>').join("")+
       '</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">'+
         Object.entries(typeInfo).map(([t,ti])=>{
-          const cn=cy[t];const locked=cn===0;
-          const toNext=cy["to"+t.charAt(0).toUpperCase()+t.slice(1)];
-          return'<div style="padding:8px;border-radius:7px;background:'+ti.col+(locked?"0d":"20")+';border:1px solid '+ti.col+(locked?"30":"60")+';text-align:center">'+
+          const cn=cy[t];const toNext=cy["to"+t.charAt(0).toUpperCase()+t.slice(1)];
+          const hasActive=!!af[t];const cycleComplete=cn>0&&!hasActive;
+          return'<div style="padding:8px;border-radius:7px;text-align:center;background:'+ti.col+(cn===0?"0d":hasActive?"25":"15")+';border:1px solid '+ti.col+(cn===0?"25":hasActive?"70":"40")+'">'+
             '<div style="font-size:9px;font-weight:700;color:'+ti.col+';letter-spacing:1px">'+ti.label+'</div>'+
-            (locked?'<div style="font-size:10px;color:var(--mut)">'+toNext+'wk to unlock</div>':
-             toNext===0?'<div style="font-size:10px;color:'+ti.col+'">Cycle '+cn+' active</div>':
-             '<div style="font-size:10px;color:var(--mut)">Cycle '+cn+' — next in '+toNext+'wk</div>')+
+            (cn===0?'<div style="font-size:9px;color:var(--mut);margin-top:2px">🔒 '+toNext+'wk</div>':
+             hasActive?'<div style="font-size:9px;color:'+ti.col+';margin-top:2px">⚔️ CYCLE '+cn+'</div>':
+             toNext>0?'<div style="font-size:9px;color:var(--mut);margin-top:2px">✓ done · '+toNext+'wk</div>':
+             '<div style="font-size:9px;color:'+ti.col+';margin-top:2px">ready</div>')+
           '</div>';
         }).join("")+
       '</div></div>';
@@ -1261,28 +1263,35 @@ function buildChallenges(d){
     let fightsHtml="";
     Object.entries(typeInfo).forEach(([t,ti])=>{
       const cn=cy[t];const locked=cn===0;
-      const fights=BOSS_FIGHTS.filter(b=>b.cycle===t);
-      fightsHtml+='<div style="margin-bottom:18px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+      const activeId=af[t];
+      const activeBf=activeId?BOSS_FIGHTS.find(b=>b.id===activeId):null;
+      const toNext=cy["to"+t.charAt(0).toUpperCase()+t.slice(1)];
+      const allHistory=BOSS_FIGHTS.filter(b=>b.cycle===t&&d.bossFightProgress?.[b.id]);
+      fightsHtml+='<div style="margin-bottom:20px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
         '<div style="font-size:10px;letter-spacing:3px;color:'+ti.col+';font-weight:700">'+ti.label+' BOSS FIGHTS</div>'+
-        (locked?'<span style="font-size:10px;color:var(--mut);background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:10px">🔒 '+cy["to"+t.charAt(0).toUpperCase()+t.slice(1)]+'wk to unlock</span>':'<span style="font-size:10px;background:'+ti.col+'20;color:'+ti.col+';padding:2px 8px;border-radius:10px">Cycle '+cn+'</span>')+
+        (locked?'<span style="font-size:9px;color:var(--mut);padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.05)">🔒 '+toNext+'wk to unlock</span>':
+         activeId?'<span style="font-size:9px;color:'+ti.col+';padding:2px 8px;border-radius:10px;background:'+ti.col+'15">Cycle '+cn+' · Boss has appeared</span>':
+         '<span style="font-size:9px;color:var(--mut);padding:2px 8px;border-radius:10px;background:rgba(255,255,255,0.05)">Cycle '+cn+' complete'+(toNext>0?' · next in '+toNext+'wk':'')+'</span>')+
       '</div>'+
-      fights.map(b=>{
-        const prog=d.bossFightProgress?.[b.id];
-        const doneThisCycle=prog&&prog.cycle===cn;
-        const donePrev=prog&&prog.cycle<cn;
-        return'<div style="margin-bottom:10px;padding:12px;border-radius:8px;opacity:'+(locked?"0.4":"1")+';background:'+(doneThisCycle?"rgba(74,222,128,0.06)":"transparent")+';border:1px solid '+(doneThisCycle?ti.col+"50":donePrev?"rgba(255,255,255,0.07)":"var(--card-b)")+'">'+
-          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
-            '<div style="font-size:13px;font-weight:700;color:'+(doneThisCycle?ti.col:locked||donePrev?"var(--mut)":"var(--fg)")+'">'+b.name+'</div>'+
-            '<span style="font-size:9px;padding:2px 8px;border-radius:8px;background:'+ti.col+'15;color:'+ti.col+'">+'+b.xp+' XP</span>'+
+      (locked?
+        '<div style="padding:14px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--card-b);text-align:center;opacity:0.5"><div style="font-size:12px;color:var(--mut)">🔒 Locked — train '+toNext+' more weeks to unlock</div></div>'
+      :activeId&&activeBf?
+        '<div style="padding:14px;border-radius:10px;background:'+ti.col+'10;border:2px solid '+ti.col+'60">'+
+          '<div style="font-size:9px;letter-spacing:2px;color:'+ti.col+';margin-bottom:8px">⚔️ CURRENT BOSS — CYCLE '+cn+'</div>'+
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'+
+            '<div style="font-size:15px;font-weight:700;color:var(--fg)">'+activeBf.name+'</div>'+
+            '<span style="font-size:10px;padding:3px 8px;border-radius:8px;background:'+ti.col+'20;color:'+ti.col+'">+'+activeBf.xp+' XP</span>'+
           '</div>'+
-          '<div style="font-size:11px;color:var(--fg2);margin-bottom:6px">'+b.desc+'</div>'+
-          '<div style="font-size:10px;color:'+ti.col+';margin-bottom:8px">🏆 Title: '+b.title+'</div>'+
-          (locked?'<div style="font-size:10px;color:var(--mut)">🔒 Locked</div>':
-           doneThisCycle?'<div style="font-size:10px;color:var(--mut)">✓ Cycle '+cn+' complete — '+prog.date+'</div>':
-           donePrev?'<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:10px;color:var(--mut)">Last done cycle '+prog.cycle+' — '+prog.date+'</div><button onclick="completeBossFight(\''+b.id+'\')" style="font-size:10px;padding:4px 10px;border-radius:5px;cursor:pointer;border:1px solid '+ti.col+'40;background:transparent;color:'+ti.col+'">REDO ↻</button></div>':
-           '<button onclick="completeBossFight(\''+b.id+'\')" class="btn" style="font-size:11px;padding:6px 12px;border-color:'+ti.col+';color:'+ti.col+'">COMPLETE ⚔️</button>')+
-        '</div>';
-      }).join("")+
+          '<div style="font-size:12px;color:var(--fg2);line-height:1.6;margin-bottom:8px">'+activeBf.desc+'</div>'+
+          '<div style="font-size:10px;color:'+ti.col+';margin-bottom:12px">🏆 Title: '+activeBf.title+'</div>'+
+          '<button onclick="completeBossFight(\''+activeBf.id+'\')" class="btn" style="border-color:'+ti.col+';color:'+ti.col+';font-size:12px;padding:8px 18px">COMPLETE ⚔️</button>'+
+        '</div>'
+      :
+        '<div style="padding:12px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--card-b);text-align:center"><div style="font-size:11px;color:var(--mut)">✓ This cycle\'s boss defeated'+(toNext>0?' — next boss spawns in '+toNext+' weeks':'')+' </div></div>'
+      )+
+      (allHistory.length?'<div style="margin-top:10px"><div style="font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:6px">HISTORY</div>'+
+        allHistory.map(b=>{const p=d.bossFightProgress[b.id];return'<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--card-b);font-size:11px"><span style="color:var(--fg2)">'+b.name+'</span><span style="color:var(--mut)">Cycle '+p.cycle+' · '+p.date+'</span></div>';}).join("")+
+      '</div>':"")+
       '</div>';
     });
 
@@ -1659,6 +1668,8 @@ function completeBossFight(id){
   const cycles=getBossCycles(state.data);
   const cn=cycles[bf.cycle];
   state.data.bossFightProgress[id]={done:true,date:new Date().toLocaleDateString("en-GB"),cycle:cn};
+  if(!state.data.bossActiveFights)state.data.bossActiveFights={minor:null,major:null,raid:null};
+  if(state.data.bossActiveFights[bf.cycle]===id)state.data.bossActiveFights[bf.cycle]=null;
   if(bf.title&&!state.data.titles.includes(bf.title))state.data.titles.push(bf.title);
   if(!state.data.activeTitle&&bf.title)state.data.activeTitle=bf.title;
   saveData();
@@ -1859,18 +1870,32 @@ function getBossCycles(d){
   const toNext=(w2,interval)=>w2===0?interval:(w2%interval===0?0:interval-(w2%interval));
   return{weeks:w,minor,major,raid,toMinor:toNext(w,4),toMajor:toNext(w,8),toRaid:toNext(w,12)};
 }
+function pickBossFight(cycleType,d){
+  const fights=BOSS_FIGHTS.filter(b=>b.cycle===cycleType);
+  if(!fights.length)return null;
+  // avoid the most recently completed one if possible
+  const lastDoneId=fights.filter(f=>d.bossFightProgress?.[f.id]).sort((a,b)=>(d.bossFightProgress[b.id]?.cycle||0)-(d.bossFightProgress[a.id]?.cycle||0))[0]?.id;
+  const pool=fights.filter(f=>f.id!==lastDoneId);
+  const from=pool.length?pool:fights;
+  return from[Math.floor(Math.random()*from.length)].id;
+}
 function checkBossFightUnlocks(d){
   const c=getBossCycles(d);
   const stored=d.bossNotifCycle||{minor:0,major:0,raid:0};
+  if(!d.bossActiveFights)d.bossActiveFights={minor:null,major:null,raid:null};
   const msgs=[];
-  if(c.minor>stored.minor)msgs.push({type:"minor",label:"MINOR",cycle:c.minor,color:"#4ade80"});
-  if(c.major>stored.major)msgs.push({type:"major",label:"MAJOR",cycle:c.major,color:"#f97316"});
-  if(c.raid>stored.raid)msgs.push({type:"raid",label:"RAID",cycle:c.raid,color:"#ef4444"});
+  ["minor","major","raid"].forEach(t=>{
+    if(c[t]>stored[t]){
+      d.bossActiveFights[t]=pickBossFight(t,d);
+      msgs.push({type:t,label:t.toUpperCase(),cycle:c[t]});
+    }
+  });
   if(msgs.length){
     d.bossNotifCycle={minor:c.minor,major:c.major,raid:c.raid};
     msgs.forEach((m,i)=>setTimeout(()=>{
-      showToast("⚔️ "+m.label+" BOSS FIGHT UNLOCKED — Cycle "+m.cycle);
-      if("Notification"in window&&Notification.permission==="granted")new Notification("Legend Protocol ⚔️",{body:m.label+" Boss Fight unlocked — Cycle "+m.cycle+". Time to step up."});
+      const bf=BOSS_FIGHTS.find(b=>b.id===d.bossActiveFights[m.type]);
+      showToast("⚔️ "+m.label+" BOSS: "+( bf?.name||"")+" has appeared!");
+      if("Notification"in window&&Notification.permission==="granted")new Notification("Legend Protocol ⚔️",{body:m.label+" Boss Fight — "+( bf?.name||"")+" has appeared. Cycle "+m.cycle+". Time to step up."});
     },i*2500));
     saveData();
   }
