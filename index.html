@@ -234,7 +234,13 @@ const CHALLENGES=[
   {id:"so10",cat:"Susan & Onion",tier:"Legend",name:"The Ballad",xp:1500,desc:"Complete every single rest day challenge for 4 consecutive rest days — all targets hit"},
   {id:"so11",cat:"Susan & Onion",tier:"Susan",name:"Dragonslayer",xp:7000,desc:"Deadlift 283kg — the estimated weight of Susan's greatsword"},
   {id:"so12",cat:"Susan & Onion",tier:"Susan",name:"The Unkillable",xp:8500,desc:"Complete a full year of training — 52 weeks logged, not a single week missed"},
-  {id:"so13",cat:"Susan & Onion",tier:"Susan",name:"Death of Onion",xp:6000,desc:"Complete your single hardest session ever — every exercise rated Max effort, come back tomorrow"}
+  {id:"so13",cat:"Susan & Onion",tier:"Susan",name:"Death of Onion",xp:6000,desc:"Complete your single hardest session ever — every exercise rated Max effort, come back tomorrow"},
+  {id:"f1",cat:"Friends",tier:"Initiate",name:"Karl's Challenge",xp:50,desc:"Complain it's too much effort. Karl's contribution to the Legend Protocol. Completed by simply existing."},
+  {id:"f2",cat:"Friends",tier:"Warrior",name:"Chloe's 12k",xp:600,desc:"Run 12km in under 1 hour. Chloe set this. No excuses."},
+  {id:"f3",cat:"Friends",tier:"Warrior",name:"Dee's Stair Master",xp:700,desc:"Stair master for 1 full hour straight. No breaks, no stepping off. Dee doesn't take days off."},
+  {id:"f4",cat:"Friends",tier:"Legend",name:"Rhys's Tokyo Drift",xp:999,desc:"Tokyo drift your car on the way to the gym for chest day. Rhys's exact words. Respect the brief."},
+  {id:"f5",cat:"Friends",tier:"Legend",name:"Ieuan's Preacher",xp:1200,desc:"Curl 60kg on preacher curl or straight bar. Your own challenge. Log it and own it."},
+  {id:"f6",cat:"Friends",tier:"Susan",name:"Jon's 180",xp:2500,desc:"Squat 180kg. Jon's set the bar. Get under it."}
 ];
 
 const BOSS_FIGHTS=[
@@ -313,7 +319,7 @@ let state={
   },
   chat:{msgs:[{role:"assistant",text:"Gunther online. Legend Protocol V2.0 loaded. Ready when you are."}],input:"",loading:false},
   workout:{showTargets:true,showHistory:false,showSuperset:false,editingExercise:null,sessionFlowMode:false,sessionFlowExIdx:0,showTemplates:false},
-  _todoPriority:"Normal",_calMonth:null,_calYear:null,_calSel:null,_randomChallenge:null,
+  _todoPriority:"Normal",_calMonth:null,_calYear:null,_calSel:null,_randomChallenge:null,_homeOpen:{},
   loaded:false
 };
 
@@ -358,6 +364,17 @@ function awardXP(amount,reason){
   render();
 }
 
+function toggleHomeSection(k){state._homeOpen[k]=!state._homeOpen[k];render();}
+function homeCard(k,title,content,defaultOpen){
+  const open=state._homeOpen[k]===undefined?defaultOpen:state._homeOpen[k];
+  return'<div class="card" style="padding:0;overflow:hidden">'+
+    '<button onclick="toggleHomeSection(\''+k+'\')" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:none;border:none;cursor:pointer;text-align:left">'+
+      '<span style="font-size:9px;letter-spacing:3px;color:var(--acc);font-weight:700">'+title+'</span>'+
+      '<span style="font-size:14px;color:var(--mut);transition:transform 0.2s;display:inline-block;transform:'+(open?"rotate(180deg)":"rotate(0deg)")+'">▾</span>'+
+    '</button>'+
+    (open?'<div style="padding:0 16px 14px">'+content+'</div>':"")+
+  '</div>';
+}
 function showToast(msg){
   const t=document.createElement("div");
   t.style.cssText="position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(74,222,128,0.2);border:1px solid #4ade80;color:#4ade80;padding:8px 20px;border-radius:8px;font-size:12px;letter-spacing:1px;font-weight:700;backdrop-filter:blur(10px);pointer-events:none;animation:toastIn 0.3s ease;white-space:nowrap";
@@ -548,6 +565,10 @@ const CHALLENGE_AUTO={
   "so12": d=>_trainingSpanDays(d)>=365,
   // Saitama routine from rest day log: push-ups >= 100, sit-ups >= 100, steps >= 10000
   "a1": d=>Object.values(d.restLogs||{}).some(rl=>parseFloat(rl.pushups||0)>=100&&parseFloat(rl.situps||0)>=100&&parseFloat(rl.steps||0)>=10000),
+  // Ieuan's Preacher: 60kg on any curl exercise
+  "f5": d=>Object.entries(d.exerciseHistory||{}).some(([k,h])=>/curl|preacher/i.test(k)&&h.some(e=>parseFloat(e.weight||0)>=60)),
+  // Jon's 180: squat 180kg
+  "f6": d=>_maxLift(d,"squat")>=180||(d.pbs||[]).some(p=>/squat/i.test(p.lift)&&parseFloat(p.weight||0)>=180),
 };
 
 function _trainingSpanDays(d){const dates=Object.keys(d.workoutLogs||{}).filter(k=>!k.includes("_rpe")).map(k=>k.replace(/^d\d+-/,"")).sort();if(dates.length<2)return 0;return Math.round((new Date(dates[dates.length-1])-new Date(dates[0]))/86400000);}
@@ -706,17 +727,13 @@ function buildHome(workout,d){
     '<div class="card" style="padding:12px;margin-bottom:0;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:var(--mut)">WEIGHT</div><div style="font-size:22px;color:#4ade80;font-weight:700;margin-top:2px">'+(lw?lw.weight+"kg":"—")+'</div><div style="font-size:9px;color:var(--mut)">'+(lw?.date||"log it")+'</div></div>'+
     '<div class="card" style="padding:12px;margin-bottom:0;text-align:center"><div style="font-size:8px;letter-spacing:2px;color:var(--mut)">WATER</div>'+buildWaterRing(todayWater,3000)+'</div>'+
   '</div>'+
-  // Training heatmap
-  '<div class="card"><div class="sec-title">TRAINING HEATMAP — 365 DAYS</div>'+buildHeatmap(d)+'</div>'+
-  // Training load
-  buildTrainingLoadCard(d)+
-  // Daily briefing
-  (d.dailyBriefing?'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="sec-title" style="margin-bottom:0">GUNTHER\'S BRIEFING</div><button onclick="generateDailyBriefing()" style="background:none;border:none;color:var(--acc);cursor:pointer;font-size:10px;letter-spacing:1px">↻ REFRESH</button></div><div style="font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap">'+d.dailyBriefing+'</div></div>':'<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="sec-title" style="margin-bottom:4px">GUNTHER\'S BRIEFING</div><div style="font-size:11px;color:var(--mut)">Auto-generated daily summary</div></div><button onclick="generateDailyBriefing()" class="btn" style="font-size:11px;padding:8px 14px">BRIEF ME</button></div></div>')+
-  // Weekly review
-  '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:'+(d.weeklyReview?"10":"0")+'px"><div class="sec-title" style="margin-bottom:0">WEEKLY REVIEW</div><button onclick="generateWeeklyReview()" style="font-size:10px;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid rgba(74,222,128,0.35);background:rgba(74,222,128,0.08);color:#4ade80;letter-spacing:1px">'+(d.weeklyReview?"↻ REFRESH":"GENERATE")+'</button></div>'+(d.weeklyReview?'<div style="font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap">'+d.weeklyReview+'</div><div style="font-size:10px;color:var(--mut);margin-top:6px">Generated: '+(d.lastWeeklyReviewDate||"")+'</div>':'<div style="font-size:11px;color:var(--mut);margin-top:8px">Get Gunther\'s take on your training week.</div>')+'</div>'+
-  // Title selector
-  (d.titles?.length?'<div class="card"><div class="sec-title">ACTIVE TITLE</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+d.titles.map(t=>'<button onclick="setActiveTitle(\''+t+'\')" style="padding:5px 12px;border-radius:10px;cursor:pointer;font-size:11px;border:1px solid '+(d.activeTitle===t?"#a855f7":"var(--card-b)")+';background:'+(d.activeTitle===t?"rgba(168,85,247,0.15)":"transparent")+';color:'+(d.activeTitle===t?"#a855f7":"var(--fg2)")+'">'+t+'</button>').join("")+'</div></div>':"")+
-  // Quick Gunther
+  // Collapsible lower sections
+  homeCard("heatmap","TRAINING HEATMAP — 365 DAYS",buildHeatmap(d),false)+
+  homeCard("load","WEEKLY TRAINING LOAD",(()=>{const pts=calcWeeklyLoad(d);if(pts.length<2)return'<div style="font-size:11px;color:var(--mut);text-align:center;padding:8px">Log more sessions to see trend</div>';const latest=pts[pts.length-1];const prev=pts[pts.length-2];const diff=latest.y-prev.y;return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:22px;font-weight:700;color:#4ade80">'+latest.y.toLocaleString()+'</div><div style="font-size:10px;color:'+(diff>0?"#ef4444":diff<0?"#4ade80":"var(--mut)")+'">'+(diff>0?"+":"")+diff.toLocaleString()+' vs last wk</div></div>'+buildSvgLineChart(pts,"#f97316");})(),false)+
+  homeCard("brief","GUNTHER\'S BRIEFING",(d.dailyBriefing?'<div style="font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap;margin-bottom:10px">'+d.dailyBriefing+'</div><button onclick="generateDailyBriefing()" style="font-size:10px;padding:4px 10px;border-radius:5px;cursor:pointer;border:1px solid rgba(74,222,128,0.3);background:transparent;color:#4ade80">↻ Refresh</button>':'<div style="font-size:11px;color:var(--mut);margin-bottom:10px">Auto-generated daily summary</div><button onclick="generateDailyBriefing()" class="btn" style="font-size:11px;padding:8px 14px">BRIEF ME</button>'),true)+
+  homeCard("review","WEEKLY REVIEW",'<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="generateWeeklyReview()" style="font-size:10px;padding:4px 10px;border-radius:5px;cursor:pointer;border:1px solid rgba(74,222,128,0.3);background:transparent;color:#4ade80">'+(d.weeklyReview?"↻ Refresh":"Generate")+'</button></div>'+(d.weeklyReview?'<div style="font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap">'+d.weeklyReview+'</div><div style="font-size:10px;color:var(--mut);margin-top:6px">'+( d.lastWeeklyReviewDate||"")+'</div>':'<div style="font-size:11px;color:var(--mut)">Get Gunther\'s take on your training week.</div>'),false)+
+  (d.titles?.length?homeCard("titles","ACTIVE TITLE",'<div style="display:flex;gap:6px;flex-wrap:wrap">'+d.titles.map(t=>'<button onclick="setActiveTitle(\''+t+'\')" style="padding:5px 12px;border-radius:10px;cursor:pointer;font-size:11px;border:1px solid '+(d.activeTitle===t?"#a855f7":"var(--card-b)")+';background:'+(d.activeTitle===t?"rgba(168,85,247,0.15)":"transparent")+';color:'+(d.activeTitle===t?"#a855f7":"var(--fg2)")+'">'+t+'</button>').join("")+'</div>',true):"")+
+  // Quick Gunther — always visible
   '<div class="card">'+
     '<div class="sec-title">ASK GUNTHER</div>'+
     '<div style="display:flex;gap:8px">'+
@@ -725,14 +742,10 @@ function buildHome(workout,d){
       '<button onclick="startVoice(\'home-ask\',quickAsk)" style="background:none;border:1px solid var(--inp-b);border-radius:7px;padding:8px 10px;cursor:pointer;font-size:14px;flex-shrink:0">🎤</button>'+
     '</div>'+
   '</div>'+
-  // PBs
-  (pbs.length?'<div class="card"><div class="sec-title">RECENT PBs</div>'+pbs.map((p,i)=>'<div style="display:flex;justify-content:space-between;padding:6px 0;'+(i<pbs.length-1?"border-bottom:1px solid var(--card-b)":"")+'"><span style="font-size:13px;color:var(--fg2)">'+p.lift+'</span><span style="font-size:13px;color:#4ade80;font-weight:700">'+p.weight+'kg × '+p.reps+'</span></div>').join("")+'</div>':"")+
-  // Todos
-  (todos.length?'<div class="card"><div class="sec-title">PENDING TASKS</div>'+todos.map(t=>'<div style="display:flex;align-items:center;gap:10px;padding:5px 0"><div style="width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0"></div><span style="font-size:13px;color:var(--fg2)">'+t.text+'</span></div>').join("")+'</div>':"")+
-  // Settings / backup + notifications
-  '<div class="card">'+
-    '<div class="sec-title">SETTINGS</div>'+
-    '<div style="margin-bottom:12px"><div style="font-size:10px;color:var(--mut);letter-spacing:2px;margin-bottom:8px">REMINDERS</div>'+
+  homeCard("pbs","RECENT PBs",pbs.length?pbs.map((p,i)=>'<div style="display:flex;justify-content:space-between;padding:6px 0;'+(i<pbs.length-1?"border-bottom:1px solid var(--card-b)":"")+'"><span style="font-size:13px;color:var(--fg2)">'+p.lift+'</span><span style="font-size:13px;color:#4ade80;font-weight:700">'+p.weight+'kg × '+p.reps+'</span></div>').join(""):'<div style="font-size:11px;color:var(--mut)">No PBs logged yet</div>',true)+
+  homeCard("todos","PENDING TASKS",todos.length?todos.map(t=>'<div style="display:flex;align-items:center;gap:10px;padding:5px 0"><div style="width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0"></div><span style="font-size:13px;color:var(--fg2)">'+t.text+'</span></div>').join(""):'<div style="font-size:11px;color:var(--mut)">No pending tasks</div>',false)+
+  homeCard("settings","SETTINGS",
+    '<div style="margin-bottom:14px"><div style="font-size:10px;color:var(--mut);letter-spacing:2px;margin-bottom:8px">REMINDERS</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
         '<div><div style="font-size:10px;color:var(--fg2);margin-bottom:4px">Workout time</div><input class="inp" type="time" id="notif-workout" value="'+(d.notifSettings?.workout||"")+'" onchange="saveNotifSettings()"></div>'+
         '<div><div style="font-size:10px;color:var(--fg2);margin-bottom:4px">Creatine time</div><input class="inp" type="time" id="notif-creatine" value="'+(d.notifSettings?.creatine||"")+'" onchange="saveNotifSettings()"></div>'+
@@ -743,8 +756,8 @@ function buildHome(workout,d){
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="btn" onclick="exportData()" style="font-size:11px;padding:7px 12px">📥 Export</button>'+
       '<label class="btn" style="font-size:11px;padding:7px 12px;cursor:pointer">📤 Import<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>'+
-    '</div>'+
-  '</div>'+
+    '</div>',
+  false)+
   '</div>';
 }
 
@@ -1172,7 +1185,7 @@ function buildMacros(d){
 
 
 function buildChallenges(d){
-  const cats=["All","Anime","Space Marine 2","Elden Ring","Dark Souls","Tekken","CBum","Dorian","Arnold","Ronnie","Susan & Onion"];
+  const cats=["All","Friends","Anime","Space Marine 2","Elden Ring","Dark Souls","Tekken","CBum","Dorian","Arnold","Ronnie","Susan & Onion"];
   const filt=state._challengeFilter||"All";
   const tierC={Initiate:"#4ade80",Warrior:"#f97316",Legend:"#a855f7",Susan:"#ef4444"};
   const tierI={Initiate:"⚔️",Warrior:"🔥",Legend:"💀",Susan:"😈"};
