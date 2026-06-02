@@ -398,6 +398,97 @@ function getStalledExercises(d){
   return stalled;
 }
 
+// --- Challenge auto-detection helpers ---
+function _maxLift(d,name){let m=0;Object.entries(d.exerciseHistory||{}).forEach(([k,h])=>{if(k.toLowerCase().includes(name.toLowerCase()))h.forEach(e=>{const w=parseFloat(e.weight)||0;if(w>m)m=w;});});return m;}
+function _maxLiftMinReps(d,name,minR){let m=0;Object.entries(d.exerciseHistory||{}).forEach(([k,h])=>{if(k.toLowerCase().includes(name.toLowerCase()))h.forEach(e=>{const w=parseFloat(e.weight)||0;if(w>m&&parseInt(e.reps||0)>=minR)m=w;});});return m;}
+function _bw(d){return parseFloat(d.bodyStats?.slice(-1)[0]?.weight)||0;}
+function _sessionCount(d){return Object.keys(d.workoutLogs||{}).filter(k=>!k.includes("_rpe")).length;}
+function _sessionsInWeek(d){
+  const dates=Object.keys(d.workoutLogs||{}).filter(k=>!k.includes("_rpe")).map(k=>k.replace(/^d\d+-/,"")).sort();
+  let max=0;
+  for(let i=0;i<dates.length;i++){const s=new Date(dates[i]);let c=0;for(let j=i;j<dates.length;j++){if((new Date(dates[j])-s)/86400000<=6)c++;else break;}if(c>max)max=c;}
+  return max;
+}
+function _consecutiveDays(d,n){
+  const dates=[...new Set(Object.keys(d.workoutLogs||{}).filter(k=>!k.includes("_rpe")).map(k=>k.replace(/^d\d+-/,"")))].sort();
+  for(let i=0;i<=dates.length-n;i++){let ok=true;for(let j=1;j<n;j++){if((new Date(dates[i+j])-new Date(dates[i+j-1]))/86400000>1){ok=false;break;}}if(ok)return true;}
+  return false;
+}
+function _pbsInSameWeek(d,count){
+  const pbs=d.pbs||[];const byDate={};
+  pbs.forEach(p=>{if(!byDate[p.date])byDate[p.date]=new Set();byDate[p.date].add(p.lift);});
+  const dates=Object.keys(byDate).sort();let max=0;
+  for(let i=0;i<dates.length;i++){const s=new Date(dates[i]);const lifts=new Set([...byDate[dates[i]]]);for(let j=i+1;j<dates.length;j++){if((new Date(dates[j])-s)/86400000<=6)[...byDate[dates[j]]].forEach(l=>lifts.add(l));else break;}if(lifts.size>max)max=lifts.size;}
+  return max>=count;
+}
+function _pbOnLiftsInWindow(d,liftNames,days){
+  const pbs=d.pbs||[];
+  for(let i=0;i<pbs.length;i++){const s=new Date(pbs[i].date);const w=pbs.filter(p=>(new Date(p.date)-s)/86400000>=0&&(new Date(p.date)-s)/86400000<=days);const hit=new Set(w.map(p=>p.lift));if(liftNames.every(l=>hit.has(l)))return true;}
+  return false;
+}
+function _curSessionRpe(d){const today=new Date().toISOString().split("T")[0];return d.workoutLogs?.["d"+state.currentDay+"-"+today+"_rpe"]||{};}
+function _curSessionLogs(d){const today=new Date().toISOString().split("T")[0];return d.workoutLogs?.["d"+state.currentDay+"-"+today]||{};}
+function _curSessionVolume(d){const logs=_curSessionLogs(d);let t=0;Object.keys(logs).forEach(k=>{if(k.endsWith("-weight")){const[ei,si]=k.split("-");const w=parseFloat(logs[k])||0;const r=parseInt(logs[ei+"-"+si+"-reps"]||0);t+=w*r;}});return t;}
+function _allExesRated(d,splitIdx){const rpe=_curSessionRpe(d);const n=SPLIT[splitIdx]?.exercises?.length||0;return n>0&&Object.keys(rpe).length>=n;}
+function _hadRestDayComplete(d){const restTasks=SPLIT.find(s=>s.type==="rest")?.tasks||[];if(!restTasks.length)return false;return Object.values(d.restLogs||{}).some(rl=>restTasks.every(t=>parseFloat(rl[t.id]||0)>=t.goal));}
+function _consecutiveRestDaysComplete(d,n){
+  const rt=SPLIT.find(s=>s.type==="rest")?.tasks||[];if(!rt.length)return false;
+  const good=Object.entries(d.restLogs||{}).filter(([,rl])=>rt.every(t=>parseFloat(rl[t.id]||0)>=t.goal)).map(([dt])=>dt).sort();
+  for(let i=0;i<=good.length-n;i++){let ok=true;for(let j=1;j<n;j++){if((new Date(good[i+j])-new Date(good[i+j-1]))/86400000>1){ok=false;break;}}if(ok)return true;}
+  return false;
+}
+
+const CHALLENGE_AUTO={
+  "er2": d=>_sessionCount(d)>=10,
+  "er4": d=>_maxLift(d,"Conventional Deadlift")>=150,
+  "er7": d=>_maxLift(d,"Conventional Deadlift")>=200,
+  "a6":  d=>_maxLift(d,"Conventional Deadlift")>=283,
+  "so11":d=>_maxLift(d,"Conventional Deadlift")>=283,
+  "d6":  d=>_maxLift(d,"Conventional Deadlift")>=250,
+  "ro3": d=>_maxLift(d,"Conventional Deadlift")>=140,
+  "ro6": d=>_maxLift(d,"Barbell Back Squat")>=180,
+  "ar7": d=>_maxLift(d,"Barbell Bench Press")>=140,
+  "er5": d=>_maxLift(d,"Barbell Bench Press")>=100&&_maxLift(d,"Barbell Back Squat")>=140&&_maxLift(d,"Conventional Deadlift")>=180,
+  "ro7": d=>_maxLift(d,"Conventional Deadlift")>=230&&_maxLift(d,"Barbell Back Squat")>=200,
+  "t3":  d=>{const bw=_bw(d);return bw>0&&_maxLift(d,"Barbell Back Squat")>=bw*1.5;},
+  "ds6": d=>{const bw=_bw(d);return bw>0&&_maxLift(d,"Barbell Overhead Press")>=bw;},
+  "so3": d=>{const bw=_bw(d);return bw>0&&_maxLiftMinReps(d,"Conventional Deadlift",5)>=bw+50;},
+  "sm6": d=>{const bw=_bw(d);return bw>0&&_maxLift(d,"Barbell Bench Press")>=bw*2&&_maxLift(d,"Barbell Back Squat")>=bw*2&&_maxLift(d,"Conventional Deadlift")>=bw*2;},
+  "ds4": d=>(d.workoutStreak||0)>=21,
+  "t8":  d=>(d.workoutStreak||0)>=50,
+  "ds7": d=>(d.workoutStreak||0)>=365,
+  "ro2": d=>(d.pbs||[]).length>=1,
+  "er3": d=>_pbsInSameWeek(d,3),
+  "ar6": d=>_pbOnLiftsInWindow(d,["Barbell Bench Press","Barbell Overhead Press","Barbell Bent-Over Row"],6),
+  "a5":  d=>_pbOnLiftsInWindow(d,["Barbell Bench Press","Barbell Back Squat","Conventional Deadlift","Barbell Overhead Press"],28),
+  "ar1": d=>Object.keys(d.workoutLogs||{}).some(k=>k.startsWith("d5-")&&!k.includes("_rpe")),
+  "ro1": d=>Object.keys(d.workoutLogs||{}).some(k=>k.startsWith("d7-")&&!k.includes("_rpe")),
+  "ar2": d=>_sessionsInWeek(d)>=6,
+  "sm3": d=>_consecutiveDays(d,3),
+  "sm1": d=>{const logs=_curSessionLogs(d);const n=SPLIT[(state.currentDay-1)%8]?.exercises?.length||0;return _allExesRated(d,(state.currentDay-1)%8)&&n>0&&SPLIT[(state.currentDay-1)%8].exercises.every((_,ei)=>{for(let s=1;s<=5;s++){if(parseFloat(logs[ei+"-"+s+"-weight"]||0)>0)return true;}return false;});},
+  "sm4": d=>_allExesRated(d,(state.currentDay-1)%8)&&_curSessionVolume(d)>=10000,
+  "er6": d=>_allExesRated(d,(state.currentDay-1)%8)&&Object.values(_curSessionRpe(d)).every(r=>r==="Hard"||r==="Max"),
+  "d2":  d=>Object.values(_curSessionRpe(d)).filter(r=>r==="Max").length>=5,
+  "so13":d=>_allExesRated(d,(state.currentDay-1)%8)&&Object.values(_curSessionRpe(d)).every(r=>r==="Max"),
+  "cb2": d=>Object.keys(d.workoutLogs||{}).filter(k=>k.startsWith("d1-")&&!k.includes("_rpe")).some(sk=>{const rpe=d.workoutLogs[sk+"_rpe"]||{};const exes=SPLIT[0]?.exercises||[];const lgs=d.workoutLogs[sk]||{};return Object.keys(rpe).length>=exes.length&&exes.every((_,ei)=>{for(let s=1;s<=5;s++){if(parseFloat(lgs[ei+"-"+s+"-weight"]||0)>0)return true;}return false;});}),
+  "ds1": d=>_sessionsInWeek(d)>=4,
+  "so1": d=>_sessionsInWeek(d)>=4,
+  "ds3": d=>_hadRestDayComplete(d),
+  "so10":d=>_consecutiveRestDaysComplete(d,4),
+  "ro4": d=>{const d3=new Set(Object.keys(d.workoutLogs||{}).filter(k=>k.startsWith("d3-")&&!k.includes("_rpe")).map(k=>k.slice(3)));const d7=new Set(Object.keys(d.workoutLogs||{}).filter(k=>k.startsWith("d7-")&&!k.includes("_rpe")).map(k=>k.slice(3)));for(const a of d3)for(const b of d7)if(Math.abs(new Date(a)-new Date(b))/86400000<=6)return true;return false;},
+};
+
+function checkAllChallenges(d){
+  const newlyDone=[];
+  CHALLENGES.forEach(c=>{
+    if(d.challengeProgress?.[c.id]?.done)return;
+    const check=CHALLENGE_AUTO[c.id];
+    if(!check)return;
+    try{if(check(d)){if(!d.challengeProgress)d.challengeProgress={};d.challengeProgress[c.id]={done:true,date:new Date().toLocaleDateString("en-GB"),auto:true};d.xp=(d.xp||0)+c.xp;newlyDone.push(c);}}catch(e){}
+  });
+  if(newlyDone.length){saveData();newlyDone.forEach((c,i)=>setTimeout(()=>showToast("⚡ "+c.name+" — +"+c.xp+" XP"),i*2200));}
+}
+
 function buildWaterRing(ml,goal){
   const pct=Math.min(ml/goal,1),r=28,cx=38,cy=38,circ=2*Math.PI*r;
   const dash=pct*circ,col=ml>=goal?"#4ade80":"#38bdf8";
@@ -993,17 +1084,10 @@ function buildChallenges(d){
           '</div>'+
           '<div style="font-size:11px;color:var(--fg2);line-height:1.5;margin-bottom:10px">'+c.desc+'</div>'+
           (done?
-            '<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:10px;color:var(--mut)">Completed '+prog.date+'</div><button onclick="uncompleteChallenge(\''+c.id+'\')" style="background:none;border:1px solid rgba(239,68,68,0.35);border-radius:6px;color:#ef4444;font-size:10px;padding:3px 10px;cursor:pointer">↩ UNDO</button></div>':
-            ('<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><button onclick="completeChallenge(\''+c.id+'\')" class="btn" style="font-size:11px;padding:7px 14px">COMPLETE ✓</button></div>'+
-            '<details style="margin-top:4px"><summary style="font-size:10px;color:var(--mut);cursor:pointer;letter-spacing:1px">🔗 AUTO-COMPLETE BY WEIGHT</summary>'+
-            '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
-              '<input class="inp" id="tr-ex-'+c.id+'" placeholder="Exercise name..." style="flex:2;font-size:11px" value="'+(d.challengeTriggers?.[c.id]?.exercise||"")+'">'+
-              '<input class="inp" id="tr-wt-'+c.id+'" type="number" placeholder="Target kg" style="flex:1;font-size:11px;min-width:80px" value="'+(d.challengeTriggers?.[c.id]?.weight||"")+'">'+
-              '<button onclick="saveTrigger(\''+c.id+'\')" class="btn" style="font-size:10px;padding:5px 10px">SET</button>'+
-              (d.challengeTriggers?.[c.id]?'<button onclick="removeTrigger(\''+c.id+'\')" style="background:none;border:1px solid rgba(239,68,68,0.3);border-radius:6px;color:#ef4444;font-size:10px;padding:5px 8px;cursor:pointer">✕</button>':"")+
-            '</div>'+
-            (d.challengeTriggers?.[c.id]?'<div style="font-size:10px;color:#4ade80;margin-top:5px">Active: will auto-complete when you log ≥'+d.challengeTriggers[c.id].weight+'kg on '+d.challengeTriggers[c.id].exercise+'</div>':"")+
-            '</details>'))+
+            '<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:10px;color:var(--mut)">'+(prog.auto?"⚡ Auto-detected ":"Completed ")+prog.date+'</div><button onclick="uncompleteChallenge(\''+c.id+'\')" style="background:none;border:1px solid rgba(239,68,68,0.35);border-radius:6px;color:#ef4444;font-size:10px;padding:3px 10px;cursor:pointer">↩ UNDO</button></div>':
+            (CHALLENGE_AUTO[c.id]?
+              '<div style="font-size:10px;color:#4ade80;letter-spacing:1px">⚡ AUTO — will complete when your data meets the criteria</div>':
+              '<button onclick="completeChallenge(\''+c.id+'\')" class="btn" style="font-size:11px;padding:7px 14px">MARK DONE ✓</button>'))+
         '</div>';
       }).join("")+
     '</div>';
@@ -1205,7 +1289,6 @@ function setRPE(ei,rpe){
     if(idx>=0)hist[idx]=entry;else hist.push(entry);
     if(hist.length>12)hist=hist.slice(-12);
     state.data.exerciseHistory[exKey]=hist;
-    if(bw>0)checkChallengeTriggers(ex.name,bw);
   }
   // Check if all exercises rated → award session XP
   const allExes=SPLIT[(state.currentDay-1)%8]?.exercises||[];
@@ -1215,6 +1298,7 @@ function setRPE(ei,rpe){
     awardXP(35,"Workout Complete");
     state.data.deloadRecommended=checkDeloadNeeded(state.data);
   }
+  checkAllChallenges(state.data);
   saveData();render();
 }
 
@@ -1232,6 +1316,7 @@ function logRest(id,val){
       if(rl.steps&&parseFloat(rl.steps)>=8000)awardXP(20,"Cardio — 8k+ Steps");
     }
   }
+  checkAllChallenges(state.data);
   saveData();render();
 }
 
@@ -1241,6 +1326,7 @@ function addPB(){
   state.data.pbs.push({lift,weight:parseFloat(weight),reps,notes,season,date:new Date().toLocaleDateString("en-GB"),id:Date.now()});
   saveData();
   awardXP(120,"New PB — "+lift);
+  checkAllChallenges(state.data);
 }
 
 function addSleep(){
@@ -1249,6 +1335,7 @@ function addSleep(){
   state.data.sleep.push({hours:parseFloat(hours),quality,note,date:new Date().toLocaleDateString("en-GB"),ts:Date.now()});
   saveData();
   awardXP(8,"Sleep Logged");
+  checkAllChallenges(state.data);
 }
 
 function addBodyStat(){
@@ -1257,6 +1344,7 @@ function addBodyStat(){
   state.data.bodyStats.push({weight:parseFloat(weight),bf:bf?parseFloat(bf):null,note,date:new Date().toLocaleDateString("en-GB"),ts:Date.now()});
   saveData();
   awardXP(8,"Bodyweight Logged");
+  checkAllChallenges(state.data);
 }
 
 function addGoal(){const cat=document.getElementById("g-cat")?.value||"Gym",text=document.getElementById("g-text")?.value,target=document.getElementById("g-target")?.value||"";if(!text)return;state.data.goals.push({text,cat,target,done:false,date:new Date().toLocaleDateString("en-GB"),id:Date.now()});saveData();render();}
@@ -1593,6 +1681,7 @@ async function generateDailyBriefing(){
 }
 
 loadState();
+checkAllChallenges(state.data);
 </script>
 </body>
 </html>
