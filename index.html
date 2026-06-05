@@ -272,6 +272,18 @@ const db={
   set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
 };
 
+function wUnit(){return state.data.unitPref==="lb"?"lb":"kg";}
+function toDisp(kg){if(!kg&&kg!==0)return kg;const v=parseFloat(kg)||0;return state.data.unitPref==="lb"?Math.round(v*2.2046*10)/10:v;}
+function fromInp(val){const v=parseFloat(val)||0;return state.data.unitPref==="lb"?Math.round(v/2.2046*10)/10:v;}
+function calcPlates(totalKg,barKg){
+  let rem=(totalKg-barKg)/2;
+  const result=[];
+  if(rem<0)return result;
+  [20,15,10,5,2.5,1.25].forEach(function(p){while(rem>=p-0.001){result.push(p);rem-=p;}});
+  return result;
+}
+function getPlateColor(p){return p>=20?"#ef4444":p>=15?"#facc15":p>=10?"#22c55e":p>=5?"#3b82f6":p>=2.5?"#e5e7eb":"#9ca3af";}
+
 function getTarget(exName,exType,history){
   if(!history||!history.length)return null;
   const last=history[history.length-1];
@@ -315,10 +327,10 @@ let state={
     notifSettings:{workout:"",creatine:"",waterReminder:false},
     orm:{},measurements:[],weeklyReview:null,lastWeeklyReviewDate:null,
     preSessBriefs:{},sessionNotes:{},injuries:[],customTemplates:[],bossNotifCycle:{minor:0,major:0,raid:0},bossActiveFights:{minor:null,major:null,raid:null},
-    habits:[],habitLogs:{},extraExercises:{}
+    habits:[],habitLogs:{},extraExercises:{},unitPref:"kg"
   },
   chat:{msgs:[{role:"assistant",text:"Gunther online. Legend Protocol V2.0 loaded. Ready when you are."}],input:"",loading:false},
-  workout:{showTargets:true,showHistory:false,showSuperset:false,editingExercise:null,sessionFlowMode:false,sessionFlowExIdx:0,showTemplates:false,showAddExercise:false},
+  workout:{showTargets:true,showHistory:false,showSuperset:false,editingExercise:null,sessionFlowMode:false,sessionFlowExIdx:0,showTemplates:false,showAddExercise:false,showPlateCalc:false},
   _todoPriority:"Normal",_calMonth:null,_calYear:null,_calSel:null,_randomChallenge:null,_homeOpen:{},
   loaded:false
 };
@@ -752,6 +764,11 @@ function buildHome(workout,d){
       '</div>'+
       '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--fg2)"><input type="checkbox" id="notif-water" '+(d.notifSettings?.waterReminder?"checked":"")+' style="accent-color:#4ade80" onchange="saveNotifSettings()"> Water reminder every 2 hours</label>'+
     '</div>'+
+    '<div style="font-size:10px;color:var(--mut);letter-spacing:2px;margin-bottom:8px;margin-top:14px">UNITS</div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:14px">'+
+      '<button onclick="state.data.unitPref=\'kg\';saveData();render()" style="flex:1;padding:8px;border-radius:7px;cursor:pointer;border:1px solid '+(d.unitPref!=="lb"?"#4ade80":"rgba(74,222,128,0.2)")+';background:'+(d.unitPref!=="lb"?"rgba(74,222,128,0.15)":"transparent")+';color:'+(d.unitPref!=="lb"?"#4ade80":"var(--fg2)")+';font-size:13px;font-weight:700">kg</button>'+
+      '<button onclick="state.data.unitPref=\'lb\';saveData();render()" style="flex:1;padding:8px;border-radius:7px;cursor:pointer;border:1px solid '+(d.unitPref==="lb"?"#4ade80":"rgba(74,222,128,0.2)")+';background:'+(d.unitPref==="lb"?"rgba(74,222,128,0.15)":"transparent")+';color:'+(d.unitPref==="lb"?"#4ade80":"var(--fg2)")+';font-size:13px;font-weight:700">lb</button>'+
+    '</div>'+
     '<div style="font-size:10px;color:var(--mut);letter-spacing:2px;margin-bottom:8px">BACKUP</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="btn" onclick="exportData()" style="font-size:11px;padding:7px 12px">📥 Export</button>'+
@@ -783,11 +800,13 @@ function buildVolumeTracker(d){
     });
   });
   if(!Object.keys(groups).length)return'<div style="font-size:11px;color:var(--mut);text-align:center;padding:10px">No sessions logged this week</div>';
-  const maxSets=Math.max(...Object.values(groups));
+  const mev=10;
+  const maxSets=Math.max(...Object.values(groups),mev);
   return Object.entries(groups).sort((a,b)=>b[1]-a[1]).map(([m,sets])=>{
     const pct=sets/maxSets*100;
-    const col=sets>=12?"#ef4444":sets>=8?"#facc15":"#4ade80";
-    return'<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--fg2)">'+m+'</span><span style="color:'+col+'">'+sets+' sets</span></div><div style="background:rgba(74,222,128,0.08);border-radius:3px;height:5px"><div style="background:'+col+';height:100%;border-radius:3px;width:'+pct+'%"></div></div></div>';
+    const col=sets>=mev?"#4ade80":sets>=6?"#facc15":"#ef4444";
+    const mevPct=mev/maxSets*100;
+    return'<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--fg2)">'+m+'</span><span style="color:'+col+'">'+sets+' sets'+(sets>=mev?' ✓':' / 10')+'</span></div><div style="background:rgba(74,222,128,0.08);border-radius:3px;height:5px;position:relative"><div style="background:'+col+';height:100%;border-radius:3px;width:'+pct+'%"></div><div style="position:absolute;top:-1px;bottom:-1px;width:1px;background:rgba(255,255,255,0.25);left:'+mevPct+'%"></div></div></div>';
   }).join("");
 }
 
@@ -826,6 +845,7 @@ function buildWorkout(workout,d){
       '<button onclick="generatePreSessBrief()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid rgba(74,222,128,0.2);background:rgba(74,222,128,0.04);color:var(--fg2)"><span style="font-size:18px;line-height:1">🤖</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">BRIEF</span></button>'+
       '<button onclick="state.workout.showTemplates=!state.workout.showTemplates;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showTemplates?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showTemplates?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showTemplates?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">📋</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">TMPL</span></button>'+
       '<button onclick="state.workout.showAddExercise=!state.workout.showAddExercise;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showAddExercise?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showAddExercise?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showAddExercise?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">➕</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">ADD</span></button>'+
+      '<button onclick="state.workout.showPlateCalc=!state.workout.showPlateCalc;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showPlateCalc?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showPlateCalc?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showPlateCalc?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">⚖️</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">PLATES</span></button>'+
     '</div>'+
     (state.workout.showSuperset?
       '<div style="margin-bottom:14px;padding:14px;background:rgba(249,115,22,0.06);border-radius:8px;border:1px solid rgba(249,115,22,0.25)">'+
@@ -851,7 +871,33 @@ function buildWorkout(workout,d){
         '<input class="inp" id="add-ex-rest" placeholder="Rest" style="font-size:12px">'+
         '<button class="btn" onclick="addExercise('+state.currentDay+')" style="font-size:11px;padding:0">ADD +</button>'+
       '</div>'+
-    '</div>':"")
+    '</div>':"")+
+    (function(){
+      if(!state.workout.showPlateCalc)return"";
+      const pw=parseFloat(document.getElementById("plate-w")?.value||0);
+      const pb=parseFloat(document.getElementById("plate-bar")?.value||20);
+      const plates=pw>0&&pw>pb?calcPlates(pw,pb):[];
+      function plateDiv(p){return'<div style="width:'+(p>=20?38:p>=10?32:p>=5?26:p>=2.5?20:16)+'px;height:52px;border-radius:4px;background:'+getPlateColor(p)+';display:flex;align-items:center;justify-content:center;font-size:'+(p>=5?'8':'7')+'px;font-weight:700;color:'+(p>=2.5&&p<10?"#111":"#fff")+';writing-mode:vertical-rl;text-orientation:mixed">'+p+'</div>';}
+      const platesL=plates.map(plateDiv).join("");
+      const platesR=plates.slice().reverse().map(plateDiv).join("");
+      return'<div style="margin-bottom:14px;padding:14px;background:rgba(74,222,128,0.06);border-radius:8px;border:1px solid rgba(74,222,128,0.25)">'+
+        '<div style="font-size:9px;letter-spacing:3px;color:#4ade80;margin-bottom:10px">⚖️ PLATE CALCULATOR</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+          '<input class="inp" id="plate-w" type="number" placeholder="Target '+wUnit()+'..." oninput="render()" style="font-size:13px">'+
+          '<select class="inp" id="plate-bar" oninput="render()" style="font-size:12px"><option value="20">Olympic bar (20kg)</option><option value="15">Ladies bar (15kg)</option><option value="0">No bar</option></select>'+
+        '</div>'+
+        (pw>0&&pw>pb?
+          '<div style="display:flex;align-items:center;gap:3px;padding:10px;background:rgba(74,222,128,0.04);border-radius:6px;justify-content:center;overflow-x:auto;margin-bottom:6px">'+
+            '<div style="width:8px;height:60px;border-radius:3px;background:rgba(150,150,150,0.5)"></div>'+
+            platesL+
+            '<div style="width:50px;height:14px;border-radius:6px;background:#9ca3af;flex-shrink:0"></div>'+
+            platesR+
+            '<div style="width:8px;height:60px;border-radius:3px;background:rgba(150,150,150,0.5)"></div>'+
+          '</div>'+
+          '<div style="text-align:center;font-size:10px;color:var(--mut)">'+plates.length+' plate'+(plates.length!==1?'s':'')+' each side · Total: '+pw+'kg</div>':
+          '<div style="font-size:11px;color:var(--mut);text-align:center">Enter a target weight to see your plate setup</div>')+
+      '</div>';
+    })()
     html+='<div style="font-size:11px;color:var(--fg2);margin-bottom:16px;padding:10px;background:rgba(74,222,128,0.05);border-radius:6px">🔥 <b>Warmup:</b> '+(workout?.warmup||"")+'</div>';
     // Pre-session brief
     const preBriefKey='d'+state.currentDay+"-"+today;
@@ -906,11 +952,12 @@ function buildWorkout(workout,d){
           '<div style="font-size:14px;font-weight:700;color:var(--fg)">'+ex.name+(hasOverride?' <span style="font-size:9px;color:#4ade80;letter-spacing:1px">CUSTOM</span>':'')+(injFlagged?' <span style="font-size:9px;color:#facc15;letter-spacing:1px">⚡ MODIFY</span>':'')+'</div>'+
           (isEditing?'<button onclick="state.workout.editingExercise=null;render()" style="background:none;border:1px solid rgba(74,222,128,0.4);border-radius:5px;color:#4ade80;font-size:10px;padding:3px 8px;cursor:pointer">▲ CLOSE</button>':'<button onclick="state.workout.editingExercise=\''+editKey+'\';render()" style="background:none;border:1px solid rgba(74,222,128,0.4);border-radius:5px;color:#4ade80;font-size:10px;padding:3px 8px;cursor:pointer">✏️ EDIT</button>')+
         '</div>'+
-        (prevSess?'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:6px 8px;background:rgba(74,222,128,0.04);border-radius:5px">'+
-          '<span style="font-size:10px;color:var(--mut)">LAST SESSION</span>'+
-          '<span style="font-size:11px;color:var(--fg2)">'+prevSess.weight+'kg × '+prevSess.reps+'</span>'+
-          (poIcon?'<span style="font-size:13px;font-weight:700;color:'+poColor+'">'+poIcon+' '+(poDiff&&poDiff!=="0.0"?(parseFloat(poDiff)>0?"+":"")+poDiff+"kg":"same")+'</span>':"")+
-          '<span style="font-size:9px;color:var(--mut);margin-left:auto">RPE: '+( prevSess.rpe||"—")+'</span>'+
+        (prevSess?'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 8px;background:rgba(74,222,128,0.04);border-radius:5px;flex-wrap:wrap">'+
+          '<span style="font-size:10px;color:var(--mut)">LAST</span>'+
+          '<span style="font-size:11px;color:var(--fg2)">'+toDisp(prevSess.weight)+wUnit()+' × '+prevSess.reps+'</span>'+
+          (poIcon?'<span style="font-size:13px;font-weight:700;color:'+poColor+'">'+poIcon+' '+(poDiff&&poDiff!=="0.0"?(parseFloat(poDiff)>0?"+":"")+Math.abs(toDisp(prevSess.weight)-toDisp(prevSess.weight-(parseFloat(poDiff)||0))).toFixed(1)+wUnit():"same")+'</span>':"")+
+          '<span style="font-size:9px;color:var(--mut)">RPE: '+(prevSess.rpe||"—")+'</span>'+
+          '<button onclick="copyLastSession('+ei+',\''+exKey+'\','+(parseInt(ex.sets)||3)+')" style="font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid rgba(74,222,128,0.3);background:none;color:#4ade80;cursor:pointer;margin-left:auto;flex-shrink:0">↩ COPY</button>'+
         '</div>':"")+
         (isEditing?'<div style="margin-bottom:12px;padding:12px;background:rgba(74,222,128,0.06);border-radius:7px;border:1px solid rgba(74,222,128,0.25)">'+
           '<div style="font-size:9px;letter-spacing:2px;color:#4ade80;margin-bottom:10px">EDIT EXERCISE</div>'+
@@ -940,15 +987,18 @@ function buildWorkout(workout,d){
         '<div style="font-size:11px;color:var(--fg2);margin-bottom:10px;font-style:italic">'+ex.notes+'</div>';
       if(sparkPts.length>=2)html+='<div style="margin-bottom:8px;opacity:0.7">'+buildSvgLineChart(sparkPts,"#4ade80",50)+'</div>';
       if(state.workout.showTargets&&target){
+        const wuSets=target.tw>0?[0.4,0.6,0.8,0.9].map(function(p,i){const ww=Math.round(target.tw*p/2.5)*2.5;return'<span style="font-size:10px;color:var(--fg2);padding:3px 6px;background:rgba(74,222,128,0.08);border-radius:3px">'+toDisp(ww)+wUnit()+'×'+[10,6,3,1][i]+'</span>';}).join(""):null;
         html+='<div style="background:'+(target.stalled?"rgba(239,68,68,0.08)":"rgba(74,222,128,0.08)")+';border:1px solid '+(target.stalled?"rgba(239,68,68,0.3)":"rgba(74,222,128,0.25)")+';border-radius:7px;padding:10px;margin-bottom:10px">'+
           '<div style="font-size:9px;letter-spacing:3px;color:'+(target.stalled?"#ef4444":"#4ade80")+';margin-bottom:6px">🤖 GUNTHER TARGET</div>'+
-          '<div style="display:flex;gap:16px;margin-bottom:6px;align-items:center"><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#4ade80">'+target.tw+'kg</div><div style="font-size:9px;color:var(--mut)">WEIGHT</div></div><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#4ade80">×'+target.tr+'</div><div style="font-size:9px;color:var(--mut)">REPS</div></div><div style="text-align:center;opacity:0.6"><div style="font-size:13px;color:var(--fg2)">'+target.lw+'kg×'+target.lr+'</div><div style="font-size:9px;color:var(--mut)">LAST</div></div></div>'+
-          '<div style="font-size:11px;color:'+(target.stalled?"#ef4444":"var(--fg2)")+'">'+target.advice+'</div></div>';
+          '<div style="display:flex;gap:16px;margin-bottom:6px;align-items:center"><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#4ade80">'+toDisp(target.tw)+wUnit()+'</div><div style="font-size:9px;color:var(--mut)">WEIGHT</div></div><div style="text-align:center"><div style="font-size:20px;font-weight:700;color:#4ade80">×'+target.tr+'</div><div style="font-size:9px;color:var(--mut)">REPS</div></div><div style="text-align:center;opacity:0.6"><div style="font-size:13px;color:var(--fg2)">'+toDisp(target.lw)+wUnit()+'×'+target.lr+'</div><div style="font-size:9px;color:var(--mut)">LAST</div></div></div>'+
+          '<div style="font-size:11px;color:'+(target.stalled?"#ef4444":"var(--fg2)")+'">'+target.advice+'</div>'+
+          (wuSets?'<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(74,222,128,0.12)"><div style="font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:5px">🔥 WARM-UP SETS</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+wuSets+'</div></div>':"")+
+        '</div>';
       }
       html+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:10px">';
       for(let s=1;s<=5;s++){
         html+='<div style="text-align:center"><div style="font-size:9px;color:var(--mut);margin-bottom:3px">S'+s+'</div>'+
-          '<input type="number" placeholder="kg" value="'+(logs[ei+"-"+s+"-weight"]||"")+'" oninput="logSet('+ei+','+s+',\'weight\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;outline:none;box-sizing:border-box">'+
+          '<input type="number" placeholder="'+wUnit()+'" value="'+(logs[ei+"-"+s+"-weight"]?toDisp(logs[ei+"-"+s+"-weight"]):"")+'" oninput="logSet('+ei+','+s+',\'weight\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;outline:none;box-sizing:border-box">'+
           '<input type="number" placeholder="reps" value="'+(logs[ei+"-"+s+"-reps"]||"")+'" oninput="logSet('+ei+','+s+',\'reps\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;margin-top:3px;outline:none;box-sizing:border-box">'+
           '</div>';
       }
@@ -1000,11 +1050,12 @@ function buildWorkout(workout,d){
             '<button onclick="state.workout.editingExercise=null;render()" style="background:none;border:1px solid var(--card-b);border-radius:7px;color:var(--fg2);font-size:11px;padding:7px 12px;cursor:pointer">CANCEL</button>'+
           '</div>'+
         '</div>':"")+
-        (xPrevSess?'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:6px 8px;background:rgba(74,222,128,0.04);border-radius:5px">'+
-          '<span style="font-size:10px;color:var(--mut)">LAST SESSION</span>'+
-          '<span style="font-size:11px;color:var(--fg2)">'+xPrevSess.weight+'kg × '+xPrevSess.reps+'</span>'+
-          (xPoIcon?'<span style="font-size:13px;font-weight:700;color:'+xPoColor+'">'+xPoIcon+' '+(xPoDiff&&xPoDiff!=="0.0"?(parseFloat(xPoDiff)>0?"+":"")+xPoDiff+"kg":"same")+'</span>':"")+
-          '<span style="font-size:9px;color:var(--mut);margin-left:auto">RPE: '+(xPrevSess.rpe||"—")+'</span>'+
+        (xPrevSess?'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 8px;background:rgba(74,222,128,0.04);border-radius:5px;flex-wrap:wrap">'+
+          '<span style="font-size:10px;color:var(--mut)">LAST</span>'+
+          '<span style="font-size:11px;color:var(--fg2)">'+toDisp(xPrevSess.weight)+wUnit()+' × '+xPrevSess.reps+'</span>'+
+          (xPoIcon?'<span style="font-size:13px;font-weight:700;color:'+xPoColor+'">'+xPoIcon+'</span>':"")+
+          '<span style="font-size:9px;color:var(--mut)">RPE: '+(xPrevSess.rpe||"—")+'</span>'+
+          '<button onclick="copyLastSession('+xei+',\''+xExKey+'\','+(parseInt(xex.sets)||3)+')" style="font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid rgba(74,222,128,0.3);background:none;color:#4ade80;cursor:pointer;margin-left:auto;flex-shrink:0">↩ COPY</button>'+
         '</div>':"")+
         '<div style="display:flex;gap:10px;margin-bottom:6px;flex-wrap:wrap">'+
           '<span style="font-size:10px;color:#4ade80">Sets: '+xex.sets+'</span>'+
@@ -1018,7 +1069,7 @@ function buildWorkout(workout,d){
       html+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:10px">';
       for(let s=1;s<=5;s++){
         html+='<div style="text-align:center"><div style="font-size:9px;color:var(--mut);margin-bottom:3px">S'+s+'</div>'+
-          '<input type="number" placeholder="kg" value="'+(logs[xei+"-"+s+"-weight"]||"")+'" oninput="logSet('+xei+','+s+',\'weight\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;outline:none;box-sizing:border-box">'+
+          '<input type="number" placeholder="'+wUnit()+'" value="'+(logs[xei+"-"+s+"-weight"]?toDisp(logs[xei+"-"+s+"-weight"]):"")+'" oninput="logSet('+xei+','+s+',\'weight\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;outline:none;box-sizing:border-box">'+
           '<input type="number" placeholder="reps" value="'+(logs[xei+"-"+s+"-reps"]||"")+'" oninput="logSet('+xei+','+s+',\'reps\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;margin-top:3px;outline:none;box-sizing:border-box">'+
           '</div>';
       }
@@ -1041,22 +1092,22 @@ function buildPBs(d){
   const grouped={};
   (d.pbs||[]).forEach(p=>{if(!grouped[p.lift])grouped[p.lift]=[];grouped[p.lift].push(p);});
   const w=document.getElementById("pb-w-calc")?.value||0,r=document.getElementById("pb-r-calc")?.value||0;
-  const orm=w&&r?Math.round(parseFloat(w)*(1+parseInt(r)/30)*10)/10:null;
+  const orm=w&&r?calcORM(fromInp(w),r):null;
   return'<div style="padding:16px">'+
   '<div class="card">'+
     '<div class="sec-title">LOG NEW PB</div>'+
     '<select id="pb-lift" class="inp" style="margin-bottom:8px"><option value="">Select Lift...</option>'+lifts.map(l=>'<option>'+l+'</option>').join("")+'<option>Custom...</option></select>'+
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px"><input class="inp" id="pb-weight" type="number" placeholder="Weight kg"><input class="inp" id="pb-reps" type="number" placeholder="Reps"><input class="inp" id="pb-season" value="'+new Date().getFullYear()+'" placeholder="Year"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px"><input class="inp" id="pb-weight" type="number" placeholder="Weight '+wUnit()+'"><input class="inp" id="pb-reps" type="number" placeholder="Reps"><input class="inp" id="pb-season" value="'+new Date().getFullYear()+'" placeholder="Year"></div>'+
     '<input class="inp" id="pb-notes" placeholder="Notes (optional)" style="margin-bottom:10px">'+
     '<button class="btn" onclick="addPB()">LOG PB 🏆</button>'+
   '</div>'+
   '<div class="card">'+
     '<div class="sec-title">1RM CALCULATOR</div>'+
     '<div style="display:flex;gap:8px;margin-bottom:10px">'+
-      '<input class="inp" id="pb-w-calc" type="number" placeholder="Weight (kg)" oninput="render()">'+
+      '<input class="inp" id="pb-w-calc" type="number" placeholder="Weight ('+wUnit()+')" oninput="render()">'+
       '<input class="inp" id="pb-r-calc" type="number" placeholder="Reps" oninput="render()">'+
     '</div>'+
-    (orm?'<div style="text-align:center;padding:10px;background:rgba(74,222,128,0.1);border-radius:8px"><div style="font-size:10px;letter-spacing:3px;color:var(--mut)">ESTIMATED 1RM</div><div style="font-size:36px;font-weight:700;color:#4ade80">'+orm+'kg</div></div>':'<div style="font-size:11px;color:var(--mut);text-align:center">Enter weight and reps above</div>')+
+    (orm?'<div style="text-align:center;padding:10px;background:rgba(74,222,128,0.1);border-radius:8px"><div style="font-size:10px;letter-spacing:3px;color:var(--mut)">ESTIMATED 1RM</div><div style="font-size:36px;font-weight:700;color:#4ade80">'+toDisp(orm)+wUnit()+'</div></div>':'<div style="font-size:11px;color:var(--mut);text-align:center">Enter weight and reps above</div>')+
   '</div>'+
   buildPRPredictor(d)+
   Object.entries(grouped).map(([lift,entries])=>{
@@ -1066,11 +1117,11 @@ function buildPBs(d){
     return'<div class="card">'+
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">'+
         '<div style="font-size:14px;font-weight:700;color:var(--fg)">'+lift+'</div>'+
-        '<div style="text-align:right"><div style="font-size:22px;color:#4ade80;font-weight:700">'+best.weight+'kg</div><div style="font-size:10px;color:var(--mut)">× '+best.reps+' — BEST</div></div>'+
+        '<div style="text-align:right"><div style="font-size:22px;color:#4ade80;font-weight:700">'+toDisp(best.weight)+wUnit()+'</div><div style="font-size:10px;color:var(--mut)">× '+best.reps+' — BEST</div></div>'+
       '</div>'+
       (sparkPts.length>=2?buildScatterChart(sparkPts,"#4ade80",90):"")+
       (ormHist.length>=2?'<div style="margin-top:8px;margin-bottom:4px"><div style="font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:4px">AUTO 1RM TRACKING</div>'+buildSvgLineChart(ormHist.map(e=>({x:e.date?e.date.slice(5):"",y:e.orm})),"#a855f7",40)+'</div>':"")+
-      [...entries].reverse().map(e=>'<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--card-b);font-size:12px"><span style="color:var(--fg2)">'+e.date+'</span><span style="color:var(--fg)">'+e.weight+'kg × '+e.reps+'</span><span style="color:var(--mut)">'+e.season+'</span></div>').join("")+
+      [...entries].reverse().map(e=>'<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--card-b);font-size:12px"><span style="color:var(--fg2)">'+e.date+'</span><span style="color:var(--fg)">'+toDisp(e.weight)+wUnit()+' × '+e.reps+'</span><span style="color:var(--mut)">'+e.season+'</span></div>').join("")+
     '</div>';
   }).join("")+
   '</div>';
@@ -1552,6 +1603,18 @@ function deleteExtraExercise(day,id){
   state.data.extraExercises[day]=state.data.extraExercises[day].filter(function(e){return e.id!==id;});
   saveData();showToast("Exercise removed");render();
 }
+function copyLastSession(ei,exKey,numSets){
+  const hist=state.data.exerciseHistory[exKey]||[];
+  const last=hist[hist.length-1];
+  if(!last||!last.weight){showToast("No previous session to copy");return;}
+  const today=new Date().toISOString().split("T")[0],sk='d'+state.currentDay+"-"+today;
+  if(!state.data.workoutLogs[sk])state.data.workoutLogs[sk]={};
+  for(let s=1;s<=numSets;s++){
+    state.data.workoutLogs[sk][ei+"-"+s+"-weight"]=last.weight;
+    state.data.workoutLogs[sk][ei+"-"+s+"-reps"]=last.reps;
+  }
+  saveData();showToast("Copied "+toDisp(last.weight)+wUnit()+" × "+last.reps+" × "+numSets+" sets");render();
+}
 function saveExtraExerciseEdit(day,id,ei){
   const name=document.getElementById("sw-name-"+ei)?.value?.trim();
   const sets=document.getElementById("sw-sets-"+ei)?.value?.trim();
@@ -1572,7 +1635,14 @@ function toggleTheme(){state.theme=state.theme==="dark"?"light":"dark";localStor
 function logSet(ei,si,field,val){
   const today=new Date().toISOString().split("T")[0],sk='d'+state.currentDay+"-"+today;
   if(!state.data.workoutLogs[sk])state.data.workoutLogs[sk]={};
-  state.data.workoutLogs[sk][ei+"-"+si+"-"+field]=val;saveData();
+  const stored=field==='weight'?String(fromInp(val)):val;
+  state.data.workoutLogs[sk][ei+"-"+si+"-"+field]=stored;saveData();
+  if(field==='reps'&&val&&parseFloat(state.data.workoutLogs[sk][ei+"-"+si+"-weight"]||0)>0&&!state.timer.active){
+    const baseExes=SPLIT[(state.currentDay-1)%8]?.exercises||[];
+    const autoEx=ei<baseExes.length?{...baseExes[ei],...(state.data.exerciseOverrides?.[state.currentDay+"-"+ei]||{})}:(state.data.extraExercises?.[state.currentDay]||[])[ei-baseExes.length];
+    const restSecs=parseInt(String(autoEx?.rest||"90").replace(/[^0-9]/g,""))||90;
+    startTimer(restSecs,autoEx?.name||"Rest");
+  }
 }
 
 function setRPE(ei,rpe){
@@ -1634,7 +1704,7 @@ function logRest(id,val){
 function addPB(){
   const lift=document.getElementById("pb-lift")?.value,weight=document.getElementById("pb-weight")?.value,reps=document.getElementById("pb-reps")?.value||"1",season=document.getElementById("pb-season")?.value||new Date().getFullYear(),notes=document.getElementById("pb-notes")?.value||"";
   if(!lift||!weight)return;
-  state.data.pbs.push({lift,weight:parseFloat(weight),reps,notes,season,date:new Date().toLocaleDateString("en-GB"),id:Date.now()});
+  state.data.pbs.push({lift,weight:fromInp(weight),reps,notes,season,date:new Date().toLocaleDateString("en-GB"),id:Date.now()});
   saveData();
   awardXP(120,"New PB — "+lift);
   checkAllChallenges(state.data);
