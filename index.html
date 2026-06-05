@@ -315,10 +315,10 @@ let state={
     notifSettings:{workout:"",creatine:"",waterReminder:false},
     orm:{},measurements:[],weeklyReview:null,lastWeeklyReviewDate:null,
     preSessBriefs:{},sessionNotes:{},injuries:[],customTemplates:[],bossNotifCycle:{minor:0,major:0,raid:0},bossActiveFights:{minor:null,major:null,raid:null},
-    habits:[],habitLogs:{}
+    habits:[],habitLogs:{},extraExercises:{}
   },
   chat:{msgs:[{role:"assistant",text:"Gunther online. Legend Protocol V2.0 loaded. Ready when you are."}],input:"",loading:false},
-  workout:{showTargets:true,showHistory:false,showSuperset:false,editingExercise:null,sessionFlowMode:false,sessionFlowExIdx:0,showTemplates:false},
+  workout:{showTargets:true,showHistory:false,showSuperset:false,editingExercise:null,sessionFlowMode:false,sessionFlowExIdx:0,showTemplates:false,showAddExercise:false},
   _todoPriority:"Normal",_calMonth:null,_calYear:null,_calSel:null,_randomChallenge:null,_homeOpen:{},
   loaded:false
 };
@@ -818,16 +818,15 @@ function buildWorkout(workout,d){
     });
   } else {
     if(workout?.style)html+='<div style="font-size:10px;color:var(--mut);margin-bottom:8px;letter-spacing:2px">'+workout.style.toUpperCase()+'</div>';
-    html+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'+
-      '<button class="btn" onclick="toggleTargets()" style="padding:7px 12px;font-size:11px">'+(state.workout.showTargets?"▼ HIDE TARGETS":"▶ TARGETS")+'</button>'+
-      '<button class="btn" onclick="generateWarmUp()" style="padding:7px 12px;font-size:11px">🔥 WARM UP</button>'+
-      '<button class="btn" onclick="toggleHistory()" style="padding:7px 12px;font-size:11px">📋 HISTORY</button>'+
-      '<button class="btn" onclick="state.workout.showSuperset=!state.workout.showSuperset;render()" style="padding:7px 12px;font-size:11px">⚡ SUPERSET</button>'+
-      '<button class="btn" onclick="state.workout.editingExercise=state.workout.editingExercise?null:\'menu\';render()" style="padding:7px 12px;font-size:11px;'+(state.workout.editingExercise?'background:rgba(74,222,128,0.2);border-color:#4ade80;':'')+'">✏️ EDIT SPLIT</button>'+
-      '<button class="btn" onclick="generatePreSessBrief()" style="padding:7px 12px;font-size:11px">🤖 BRIEF</button>'+
-      '<button class="btn" onclick="state.workout.showTemplates=!state.workout.showTemplates;render()" style="padding:7px 12px;font-size:11px;'+(state.workout.showTemplates?'background:rgba(74,222,128,0.2);border-color:#4ade80;':'')+'">📋 TEMPLATES</button>'+
+    html+='<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px;-webkit-overflow-scrolling:touch">'+
+      '<button onclick="toggleTargets()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showTargets?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showTargets?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showTargets?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">🎯</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">TGTS</span></button>'+
+      '<button onclick="generateWarmUp()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid rgba(74,222,128,0.2);background:rgba(74,222,128,0.04);color:var(--fg2)"><span style="font-size:18px;line-height:1">🔥</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">WARM</span></button>'+
+      '<button onclick="toggleHistory()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showHistory?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showHistory?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showHistory?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">📋</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">HIST</span></button>'+
+      '<button onclick="state.workout.showSuperset=!state.workout.showSuperset;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showSuperset?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showSuperset?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showSuperset?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">⚡</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">SS</span></button>'+
+      '<button onclick="generatePreSessBrief()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid rgba(74,222,128,0.2);background:rgba(74,222,128,0.04);color:var(--fg2)"><span style="font-size:18px;line-height:1">🤖</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">BRIEF</span></button>'+
+      '<button onclick="state.workout.showTemplates=!state.workout.showTemplates;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showTemplates?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showTemplates?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showTemplates?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">📋</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">TMPL</span></button>'+
+      '<button onclick="state.workout.showAddExercise=!state.workout.showAddExercise;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showAddExercise?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showAddExercise?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showAddExercise?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">➕</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">ADD</span></button>'+
     '</div>'+
-    // Superset timer panel
     (state.workout.showSuperset?
       '<div style="margin-bottom:14px;padding:14px;background:rgba(249,115,22,0.06);border-radius:8px;border:1px solid rgba(249,115,22,0.25)">'+
         '<div style="font-size:10px;letter-spacing:3px;color:#f97316;margin-bottom:10px">⚡ SUPERSET TIMER</div>'+
@@ -842,7 +841,17 @@ function buildWorkout(workout,d){
           '<input class="inp" id="ss-rest" type="number" value="60" style="font-size:11px"></div>'+
         '</div>'+
         '<button onclick="startSuperset()" class="btn" style="background:rgba(249,115,22,0.15);border-color:#f97316;color:#f97316;font-size:11px;padding:8px 16px">▶ START SUPERSET</button>'+
-      '</div>':"")+""
+      '</div>':"")+
+    (state.workout.showAddExercise?'<div style="margin-bottom:14px;padding:14px;background:rgba(74,222,128,0.06);border-radius:8px;border:1px solid rgba(74,222,128,0.25)">'+
+      '<div style="font-size:9px;letter-spacing:3px;color:#4ade80;margin-bottom:10px">➕ ADD EXERCISE</div>'+
+      '<input class="inp" id="add-ex-name" placeholder="Exercise name..." style="margin-bottom:8px;font-size:13px">'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px">'+
+        '<input class="inp" id="add-ex-sets" placeholder="Sets" type="number" style="font-size:12px">'+
+        '<input class="inp" id="add-ex-reps" placeholder="Reps" style="font-size:12px">'+
+        '<input class="inp" id="add-ex-rest" placeholder="Rest" style="font-size:12px">'+
+        '<button class="btn" onclick="addExercise('+state.currentDay+')" style="font-size:11px;padding:0">ADD +</button>'+
+      '</div>'+
+    '</div>':"")
     html+='<div style="font-size:11px;color:var(--fg2);margin-bottom:16px;padding:10px;background:rgba(74,222,128,0.05);border-radius:6px">🔥 <b>Warmup:</b> '+(workout?.warmup||"")+'</div>';
     // Pre-session brief
     const preBriefKey='d'+state.currentDay+"-"+today;
@@ -895,7 +904,7 @@ function buildWorkout(workout,d){
       html+='<div style="margin-bottom:20px;padding:14px;background:rgba(74,222,128,0.04);border-radius:8px;border:1px solid '+(injFlagged?"rgba(250,204,21,0.4)":hasOverride?"rgba(74,222,128,0.4)":"rgba(74,222,128,0.1)")+'">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
           '<div style="font-size:14px;font-weight:700;color:var(--fg)">'+ex.name+(hasOverride?' <span style="font-size:9px;color:#4ade80;letter-spacing:1px">CUSTOM</span>':'')+(injFlagged?' <span style="font-size:9px;color:#facc15;letter-spacing:1px">⚡ MODIFY</span>':'')+'</div>'+
-          (state.workout.editingExercise?'<button onclick="state.workout.editingExercise=\''+editKey+'\';render()" style="background:none;border:1px solid rgba(74,222,128,0.4);border-radius:5px;color:#4ade80;font-size:10px;padding:3px 8px;cursor:pointer">'+(isEditing?"▲ CLOSE":"✏️ SWAP")+'</button>':"")+
+          (isEditing?'<button onclick="state.workout.editingExercise=null;render()" style="background:none;border:1px solid rgba(74,222,128,0.4);border-radius:5px;color:#4ade80;font-size:10px;padding:3px 8px;cursor:pointer">▲ CLOSE</button>':'<button onclick="state.workout.editingExercise=\''+editKey+'\';render()" style="background:none;border:1px solid rgba(74,222,128,0.4);border-radius:5px;color:#4ade80;font-size:10px;padding:3px 8px;cursor:pointer">✏️ EDIT</button>')+
         '</div>'+
         (prevSess?'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:6px 8px;background:rgba(74,222,128,0.04);border-radius:5px">'+
           '<span style="font-size:10px;color:var(--mut)">LAST SESSION</span>'+
@@ -904,11 +913,15 @@ function buildWorkout(workout,d){
           '<span style="font-size:9px;color:var(--mut);margin-left:auto">RPE: '+( prevSess.rpe||"—")+'</span>'+
         '</div>':"")+
         (isEditing?'<div style="margin-bottom:12px;padding:12px;background:rgba(74,222,128,0.06);border-radius:7px;border:1px solid rgba(74,222,128,0.25)">'+
-          '<div style="font-size:9px;letter-spacing:2px;color:#4ade80;margin-bottom:10px">SWAP EXERCISE</div>'+
+          '<div style="font-size:9px;letter-spacing:2px;color:#4ade80;margin-bottom:10px">EDIT EXERCISE</div>'+
           '<input class="inp" id="sw-name-'+ei+'" placeholder="Exercise name..." value="'+ex.name+'" style="margin-bottom:7px;font-size:13px">'+
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'+
             '<input class="inp" id="sw-sets-'+ei+'" placeholder="Sets..." value="'+ex.sets+'" style="font-size:12px">'+
             '<input class="inp" id="sw-reps-'+ei+'" placeholder="Reps..." value="'+ex.reps+'" style="font-size:12px">'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'+
+            '<input class="inp" id="sw-tempo-'+ei+'" placeholder="Tempo..." value="'+ex.tempo+'" style="font-size:12px">'+
+            '<input class="inp" id="sw-rest-'+ei+'" placeholder="Rest..." value="'+ex.rest+'" style="font-size:12px">'+
           '</div>'+
           '<input class="inp" id="sw-notes-'+ei+'" placeholder="Notes..." value="'+ex.notes+'" style="margin-bottom:10px;font-size:12px">'+
           '<div style="display:flex;gap:8px">'+
@@ -942,6 +955,76 @@ function buildWorkout(workout,d){
       html+='</div><div style="font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:6px">HOW DID IT FEEL?</div>'+
         '<div style="display:flex;gap:6px">'+
           ['Easy','Hard','Max'].map(r=>'<button onclick="setRPE('+ei+',\''+r+'\')" style="flex:1;padding:6px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;border:1px solid '+rpeC[r]+';background:'+(curRpe===r?rpeC[r]+"30":"transparent")+';color:'+rpeC[r]+'">'+r+'</button>').join("")+
+        '</div></div>';
+    });
+    // Extra (user-added) exercises
+    const extras=(d.extraExercises?.[state.currentDay]||[]);
+    const baseCount=(workout?.exercises||[]).length;
+    extras.forEach(function(xex,xi){
+      const xei=baseCount+xi;
+      const xEditKey='extra-'+xex.id;
+      const xIsEditing=state.workout.editingExercise===xEditKey;
+      const xExKey=state.currentDay+"-"+xex.name;
+      const xHistory=d.exerciseHistory?.[xExKey]||[];
+      const xCurRpe=rpe[xei];
+      const xSparkPts=xHistory.slice(-6).map(function(h){return{x:h.date?h.date.slice(5):"",y:parseFloat(h.weight)||0};});
+      const xPrevSess=xHistory.length>=1?xHistory[xHistory.length-1]:null;
+      let xTodayBestW=0,xTodayBestR=0;
+      for(let s=1;s<=5;s++){const w=parseFloat(logs[xei+"-"+s+"-weight"]||0);if(w>xTodayBestW){xTodayBestW=w;xTodayBestR=parseInt(logs[xei+"-"+s+"-reps"]||0);}}
+      const xPoIcon=xTodayBestW&&xPrevSess?(xTodayBestW>xPrevSess.weight?"↑":xTodayBestW<xPrevSess.weight?"↓":"="):null;
+      const xPoColor=xPoIcon==="↑"?"#4ade80":xPoIcon==="↓"?"#ef4444":"#facc15";
+      const xPoDiff=xPrevSess&&xTodayBestW?(xTodayBestW-xPrevSess.weight).toFixed(1):null;
+      html+='<div style="margin-bottom:20px;padding:14px;background:rgba(74,222,128,0.04);border-radius:8px;border:1px solid rgba(74,222,128,0.3)">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'+
+          '<div style="font-size:14px;font-weight:700;color:var(--fg)">'+xex.name+' <span style="font-size:9px;color:#4ade80;letter-spacing:1px">ADDED</span></div>'+
+          '<div style="display:flex;gap:6px">'+
+            (xIsEditing?'<button onclick="state.workout.editingExercise=null;render()" style="background:none;border:1px solid rgba(74,222,128,0.4);border-radius:5px;color:#4ade80;font-size:10px;padding:3px 8px;cursor:pointer">▲ CLOSE</button>':
+            '<button onclick="state.workout.editingExercise=\''+xEditKey+'\';render()" style="background:none;border:1px solid rgba(74,222,128,0.4);border-radius:5px;color:#4ade80;font-size:10px;padding:3px 8px;cursor:pointer">✏️ EDIT</button>')+
+            '<button onclick="deleteExtraExercise('+state.currentDay+','+xex.id+')" style="background:none;border:1px solid rgba(239,68,68,0.4);border-radius:5px;color:#ef4444;font-size:10px;padding:3px 8px;cursor:pointer">✕</button>'+
+          '</div>'+
+        '</div>'+
+        (xIsEditing?'<div style="margin-bottom:12px;padding:12px;background:rgba(74,222,128,0.06);border-radius:7px;border:1px solid rgba(74,222,128,0.25)">'+
+          '<div style="font-size:9px;letter-spacing:2px;color:#4ade80;margin-bottom:10px">EDIT EXERCISE</div>'+
+          '<input class="inp" id="sw-name-'+xei+'" placeholder="Exercise name..." value="'+xex.name+'" style="margin-bottom:7px;font-size:13px">'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'+
+            '<input class="inp" id="sw-sets-'+xei+'" placeholder="Sets..." value="'+xex.sets+'" style="font-size:12px">'+
+            '<input class="inp" id="sw-reps-'+xei+'" placeholder="Reps..." value="'+xex.reps+'" style="font-size:12px">'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px">'+
+            '<input class="inp" id="sw-tempo-'+xei+'" placeholder="Tempo..." value="'+(xex.tempo||"")+'" style="font-size:12px">'+
+            '<input class="inp" id="sw-rest-'+xei+'" placeholder="Rest..." value="'+xex.rest+'" style="font-size:12px">'+
+          '</div>'+
+          '<input class="inp" id="sw-notes-'+xei+'" placeholder="Notes..." value="'+(xex.notes||"")+'" style="margin-bottom:10px;font-size:12px">'+
+          '<div style="display:flex;gap:8px">'+
+            '<button class="btn" onclick="saveExtraExerciseEdit('+state.currentDay+','+xex.id+','+xei+')" style="font-size:11px;padding:7px 14px">SAVE</button>'+
+            '<button onclick="state.workout.editingExercise=null;render()" style="background:none;border:1px solid var(--card-b);border-radius:7px;color:var(--fg2);font-size:11px;padding:7px 12px;cursor:pointer">CANCEL</button>'+
+          '</div>'+
+        '</div>':"")+
+        (xPrevSess?'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:6px 8px;background:rgba(74,222,128,0.04);border-radius:5px">'+
+          '<span style="font-size:10px;color:var(--mut)">LAST SESSION</span>'+
+          '<span style="font-size:11px;color:var(--fg2)">'+xPrevSess.weight+'kg × '+xPrevSess.reps+'</span>'+
+          (xPoIcon?'<span style="font-size:13px;font-weight:700;color:'+xPoColor+'">'+xPoIcon+' '+(xPoDiff&&xPoDiff!=="0.0"?(parseFloat(xPoDiff)>0?"+":"")+xPoDiff+"kg":"same")+'</span>':"")+
+          '<span style="font-size:9px;color:var(--mut);margin-left:auto">RPE: '+(xPrevSess.rpe||"—")+'</span>'+
+        '</div>':"")+
+        '<div style="display:flex;gap:10px;margin-bottom:6px;flex-wrap:wrap">'+
+          '<span style="font-size:10px;color:#4ade80">Sets: '+xex.sets+'</span>'+
+          '<span style="font-size:10px;color:#4ade80">Reps: '+xex.reps+'</span>'+
+          '<span style="font-size:10px;color:var(--mut)">Tempo: '+(xex.tempo||"2-0-2")+'</span>'+
+          '<span style="font-size:10px;color:var(--mut)">Rest: '+xex.rest+'</span>'+
+          '<button onclick="startTimer('+(parseInt(String(xex.rest).replace(/[^0-9]/g,"")||"90")||90)+',\''+xex.name+'\')" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid rgba(74,222,128,0.3);background:none;color:#4ade80;cursor:pointer">⏱ TIMER</button>'+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--fg2);margin-bottom:10px;font-style:italic">'+(xex.notes||"")+'</div>';
+      if(xSparkPts.length>=2)html+='<div style="margin-bottom:8px;opacity:0.7">'+buildSvgLineChart(xSparkPts,"#4ade80",50)+'</div>';
+      html+='<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:10px">';
+      for(let s=1;s<=5;s++){
+        html+='<div style="text-align:center"><div style="font-size:9px;color:var(--mut);margin-bottom:3px">S'+s+'</div>'+
+          '<input type="number" placeholder="kg" value="'+(logs[xei+"-"+s+"-weight"]||"")+'" oninput="logSet('+xei+','+s+',\'weight\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;outline:none;box-sizing:border-box">'+
+          '<input type="number" placeholder="reps" value="'+(logs[xei+"-"+s+"-reps"]||"")+'" oninput="logSet('+xei+','+s+',\'reps\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;margin-top:3px;outline:none;box-sizing:border-box">'+
+          '</div>';
+      }
+      html+='</div><div style="font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:6px">HOW DID IT FEEL?</div>'+
+        '<div style="display:flex;gap:6px">'+
+          ['Easy','Hard','Max'].map(function(r){return '<button onclick="setRPE('+xei+',\''+r+'\')" style="flex:1;padding:6px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;border:1px solid '+rpeC[r]+';background:'+(xCurRpe===r?rpeC[r]+"30":"transparent")+';color:'+rpeC[r]+'">'+r+'</button>';}).join("")+
         '</div></div>';
     });
   }
@@ -1438,17 +1521,50 @@ function saveExerciseSwap(day,index){
   const name=document.getElementById("sw-name-"+index)?.value?.trim();
   const sets=document.getElementById("sw-sets-"+index)?.value?.trim();
   const reps=document.getElementById("sw-reps-"+index)?.value?.trim();
+  const tempo=document.getElementById("sw-tempo-"+index)?.value?.trim();
+  const rest=document.getElementById("sw-rest-"+index)?.value?.trim();
   const notes=document.getElementById("sw-notes-"+index)?.value?.trim();
   if(!name)return;
   if(!state.data.exerciseOverrides)state.data.exerciseOverrides={};
-  state.data.exerciseOverrides[day+"-"+index]={name,sets,reps,notes};
+  state.data.exerciseOverrides[day+"-"+index]={name,sets,reps,tempo,rest,notes};
   state.workout.editingExercise=null;
-  saveData();showToast("Exercise swapped — "+name);render();
+  saveData();showToast("Exercise updated — "+name);render();
 }
 function resetExercise(day,index){
   if(state.data.exerciseOverrides)delete state.data.exerciseOverrides[day+"-"+index];
   state.workout.editingExercise=null;
   saveData();showToast("Reset to default");render();
+}
+function addExercise(day){
+  const name=document.getElementById("add-ex-name")?.value?.trim();
+  const sets=document.getElementById("add-ex-sets")?.value?.trim()||"3";
+  const reps=document.getElementById("add-ex-reps")?.value?.trim()||"10";
+  const rest=document.getElementById("add-ex-rest")?.value?.trim()||"90s";
+  if(!name)return;
+  if(!state.data.extraExercises)state.data.extraExercises={};
+  if(!state.data.extraExercises[day])state.data.extraExercises[day]=[];
+  state.data.extraExercises[day].push({id:Date.now(),name,sets,reps,tempo:"2-0-2",rest,notes:""});
+  state.workout.showAddExercise=false;
+  saveData();showToast("Added — "+name);render();
+}
+function deleteExtraExercise(day,id){
+  if(!state.data.extraExercises?.[day])return;
+  state.data.extraExercises[day]=state.data.extraExercises[day].filter(function(e){return e.id!==id;});
+  saveData();showToast("Exercise removed");render();
+}
+function saveExtraExerciseEdit(day,id,ei){
+  const name=document.getElementById("sw-name-"+ei)?.value?.trim();
+  const sets=document.getElementById("sw-sets-"+ei)?.value?.trim();
+  const reps=document.getElementById("sw-reps-"+ei)?.value?.trim();
+  const tempo=document.getElementById("sw-tempo-"+ei)?.value?.trim();
+  const rest=document.getElementById("sw-rest-"+ei)?.value?.trim();
+  const notes=document.getElementById("sw-notes-"+ei)?.value?.trim();
+  if(!name)return;
+  if(!state.data.extraExercises?.[day])return;
+  const idx=state.data.extraExercises[day].findIndex(function(e){return e.id===id;});
+  if(idx>=0)state.data.extraExercises[day][idx]={...state.data.extraExercises[day][idx],name,sets,reps,tempo,rest,notes};
+  state.workout.editingExercise=null;
+  saveData();showToast("Exercise updated — "+name);render();
 }
 function toggleNav(){state.navOpen=!state.navOpen;render();}
 function toggleTheme(){state.theme=state.theme==="dark"?"light":"dark";localStorage.setItem("legend-theme",state.theme);document.body.classList.toggle("light",state.theme==="light");render();}
@@ -1463,7 +1579,16 @@ function setRPE(ei,rpe){
   const today=new Date().toISOString().split("T")[0],sk='d'+state.currentDay+"-"+today;
   if(!state.data.workoutLogs[sk+"_rpe"])state.data.workoutLogs[sk+"_rpe"]={};
   state.data.workoutLogs[sk+"_rpe"][ei]=rpe;
-  const workout=SPLIT[(state.currentDay-1)%8],ex=workout?.exercises?.[ei];
+  const baseExes=SPLIT[(state.currentDay-1)%8]?.exercises||[];
+  const baseCount=baseExes.length;
+  let ex;
+  if(ei<baseCount){
+    ex={...baseExes[ei]};
+    const ov=state.data.exerciseOverrides?.[state.currentDay+"-"+ei];
+    if(ov)ex={...ex,...ov};
+  }else{
+    ex=(state.data.extraExercises?.[state.currentDay]||[])[ei-baseCount];
+  }
   if(ex){
     const logs=state.data.workoutLogs[sk]||{};let bw=0,br=0;
     for(let s=1;s<=5;s++){const w=parseFloat(logs[ei+"-"+s+"-weight"]||0);if(w>bw){bw=w;br=parseInt(logs[ei+"-"+s+"-reps"]||0);}}
@@ -1476,10 +1601,9 @@ function setRPE(ei,rpe){
     state.data.exerciseHistory[exKey]=hist;
     if(bw&&br)trackORM(state.data,ex.name,bw,br);
   }
-  // Check if all exercises rated → award session XP
-  const allExes=SPLIT[(state.currentDay-1)%8]?.exercises||[];
+  // Check if all base exercises rated → award session XP
   const rpeLog=state.data.workoutLogs[sk+"_rpe"]||{};
-  if(allExes.length&&Object.keys(rpeLog).length>=allExes.length){
+  if(baseExes.length&&Object.keys(rpeLog).length>=baseExes.length){
     updateStreak();
     awardXP(35,"Workout Complete");
     state.data.deloadRecommended=checkDeloadNeeded(state.data);
