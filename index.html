@@ -264,7 +264,16 @@ const NAV=[
   {id:"Sleep",icon:"😴"},{id:"Body",icon:"📊"},{id:"Goals",icon:"🎯"},
   {id:"Todo",icon:"✅"},{id:"Calendar",icon:"📅"},{id:"Gaming",icon:"🎮"},
   {id:"Anime",icon:"🎌"},{id:"Movies",icon:"🎬"},{id:"Susan & Onion",icon:"📖"},
-  {id:"Macros",icon:"🥩"},{id:"Challenges",icon:"🗡️"},{id:"Habits",icon:"🔥"},{id:"Chat",icon:"💬"}
+  {id:"Macros",icon:"🥩"},{id:"Challenges",icon:"🗡️"},{id:"Habits",icon:"🔥"},{id:"Chat",icon:"💬"},
+  {id:"Rating",icon:"⭐"},{id:"Quests",icon:"📋"},{id:"Focus",icon:"⏱"}
+];
+
+const BOTTOM_NAV=[
+  {id:"Home",icon:"⚔️",label:"HOME"},
+  {id:"Quests",icon:"📋",label:"QUESTS"},
+  {id:"Workout",icon:"🏋️",label:"TRAIN"},
+  {id:"Rating",icon:"⭐",label:"RATING"},
+  {id:"_more",icon:"☰",label:"MORE"},
 ];
 
 const db={
@@ -327,11 +336,13 @@ let state={
     notifSettings:{workout:"",creatine:"",waterReminder:false},
     orm:{},measurements:[],weeklyReview:null,lastWeeklyReviewDate:null,
     preSessBriefs:{},sessionNotes:{},injuries:[],customTemplates:[],bossNotifCycle:{minor:0,major:0,raid:0},bossActiveFights:{minor:null,major:null,raid:null},
-    habits:[],habitLogs:{},extraExercises:{},unitPref:"kg"
+    habits:[],habitLogs:{},extraExercises:{},unitPref:"kg",hardMode:false,protocolStartDate:null,day1Stats:null
   },
   chat:{msgs:[{role:"assistant",text:"Gunther online. Legend Protocol V2.0 loaded. Ready when you are."}],input:"",loading:false},
   workout:{showTargets:true,showHistory:false,showSuperset:false,editingExercise:null,sessionFlowMode:false,sessionFlowExIdx:0,showTemplates:false,showAddExercise:false,showPlateCalc:false},
   _todoPriority:"Normal",_calMonth:null,_calYear:null,_calSel:null,_randomChallenge:null,_homeOpen:{},
+  _ratingTab:"Current",
+  pomodoro:{active:false,mode:"work",seconds:1500,totalSeconds:1500,intervalId:null,workMins:25,breakMins:5,round:1},
   loaded:false
 };
 
@@ -653,9 +664,10 @@ function buildApp(){
     '<button onclick="toggleTheme()" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 8px">'+(state.theme==="dark"?"☀️":"🌙")+'</button>'+
   '</div>'+
   (state.showSearch?'<div style="position:fixed;top:56px;left:0;right:0;z-index:99;background:var(--hdr);border-bottom:1px solid var(--card-b);padding:10px 16px"><input class="inp" placeholder="Search..." value="'+state.search+'" oninput="state.search=this.value" autofocus></div>':"")+
-  '<div style="padding-top:'+(state.showSearch?"114":"70")+'px;padding-bottom:16px;position:relative;z-index:10;min-height:100vh">'+
+  '<div style="padding-top:'+(state.showSearch?"114":"70")+'px;padding-bottom:80px;position:relative;z-index:10;min-height:100vh">'+
     (!state.loaded?'<div style="display:flex;align-items:center;justify-content:center;height:60vh;color:#4ade80;letter-spacing:3px;font-size:13px">LOADING...</div>':buildTab(tab,workout,d))+
-  '</div>';
+  '</div>'+
+  buildBottomNavBar();
 }
 
 function buildTab(tab,workout,d){
@@ -676,6 +688,9 @@ function buildTab(tab,workout,d){
     case"Challenges":return buildChallenges(d);
     case"Habits":return buildHabits(d);
     case"Chat":return buildChat(d);
+    case"Rating":return buildRating(d);
+    case"Quests":return buildQuests(d);
+    case"Focus":return buildFocus(d);
     default:return"";
   }
 }
@@ -756,6 +771,7 @@ function buildHome(workout,d){
   '</div>'+
   homeCard("pbs","RECENT PBs",pbs.length?pbs.map((p,i)=>'<div style="display:flex;justify-content:space-between;padding:6px 0;'+(i<pbs.length-1?"border-bottom:1px solid var(--card-b)":"")+'"><span style="font-size:13px;color:var(--fg2)">'+p.lift+'</span><span style="font-size:13px;color:#4ade80;font-weight:700">'+p.weight+'kg × '+p.reps+'</span></div>').join(""):'<div style="font-size:11px;color:var(--mut)">No PBs logged yet</div>',true)+
   homeCard("todos","PENDING TASKS",todos.length?todos.map(t=>'<div style="display:flex;align-items:center;gap:10px;padding:5px 0"><div style="width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0"></div><span style="font-size:13px;color:var(--fg2)">'+t.text+'</span></div>').join(""):'<div style="font-size:11px;color:var(--mut)">No pending tasks</div>',false)+
+  homeCard("phase","⚔️ PROTOCOL PROGRESS",buildPhaseMap(d),true)+
   homeCard("settings","SETTINGS",
     '<div style="margin-bottom:14px"><div style="font-size:10px;color:var(--mut);letter-spacing:2px;margin-bottom:8px">REMINDERS</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'+
@@ -773,6 +789,12 @@ function buildHome(workout,d){
     '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="btn" onclick="exportData()" style="font-size:11px;padding:7px 12px">📥 Export</button>'+
       '<label class="btn" style="font-size:11px;padding:7px 12px;cursor:pointer">📤 Import<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--mut);letter-spacing:2px;margin-bottom:8px;margin-top:14px">HARD MODE</div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:8px;border:1px solid '+(d.hardMode?"#ef4444":"rgba(74,222,128,0.2)")+';background:'+(d.hardMode?"rgba(239,68,68,0.08)":"transparent")+'">'+
+      '<div><div style="font-size:12px;font-weight:700;color:'+(d.hardMode?"#ef4444":"var(--fg)")+'">💀 '+(d.hardMode?"HARD MODE ACTIVE":"Hard Mode Off")+'</div>'+
+      '<div style="font-size:10px;color:var(--mut);margin-top:2px">Miss a habit = −50 XP + streak reset</div></div>'+
+      '<button onclick="toggleHardMode()" style="padding:6px 14px;border-radius:6px;cursor:pointer;border:1px solid '+(d.hardMode?"#ef4444":"rgba(74,222,128,0.3)")+';background:'+(d.hardMode?"rgba(239,68,68,0.15)":"transparent")+';color:'+(d.hardMode?"#ef4444":"#4ade80")+';font-size:11px;font-weight:700">'+(d.hardMode?"DISABLE":"ENABLE")+'</button>'+
     '</div>',
   false)+
   '</div>';
@@ -2195,6 +2217,7 @@ function buildHabits(d){
       '</div>';
     }).join("")+'</div>'
   :"")+
+  buildHabitLibrary(d)+
   '</div>';
 }
 
@@ -2446,6 +2469,441 @@ async function generateDailyBriefing(){
     state.data.lastBriefingDate=today;
     saveData();render();
   }catch{showToast("Connection failed — check API key");}
+}
+
+// ── BOTTOM NAV BAR ────────────────────────────────────────────────
+function buildBottomNavBar(){
+  const tab=state.tab;
+  return'<div style="position:fixed;bottom:0;left:0;right:0;z-index:200;background:var(--nav);border-top:1px solid var(--card-b);display:flex;height:62px;backdrop-filter:blur(20px)">'+
+    BOTTOM_NAV.map(n=>{
+      const active=n.id!=="_more"&&tab===n.id;
+      const moreActive=n.id==="_more"&&!BOTTOM_NAV.slice(0,-1).some(b=>b.id===tab);
+      const isActive=active||moreActive;
+      return'<button onclick="'+(n.id==="_more"?"toggleNav()":"setTab(\'"+n.id+"\')")+'" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:none;border:none;cursor:pointer;color:'+(isActive?"#4ade80":"var(--fg2)")+'">'+
+        '<span style="font-size:20px;line-height:1">'+(n.id==="_more"?"☰":n.icon)+'</span>'+
+        '<span style="font-size:8px;letter-spacing:1px;font-weight:700">'+(isActive?'<span style="color:#4ade80">'+n.label+'</span>':n.label)+'</span>'+
+        (isActive?'<div style="width:4px;height:4px;border-radius:50%;background:#4ade80;margin-top:1px"></div>':'')+
+      '</button>';
+    }).join("")+
+  '</div>';
+}
+
+// ── STAT COMPUTATION ──────────────────────────────────────────────
+function computeStats(d){
+  const workoutCount=Object.keys(d.workoutLogs||{}).length;
+  const streak=d.workoutStreak||0;
+  const habits=d.habits||[];
+  const today=new Date().toISOString().split("T")[0];
+  const completedChallenges=Object.keys(d.challengeProgress||{}).length;
+  const totalXP=d.xp||0;
+  const sleepArr=d.sleep||[];
+  const avgSleep=sleepArr.length?sleepArr.slice(-14).reduce((s,e)=>s+(parseFloat(e.hours)||0),0)/Math.min(sleepArr.length,14):0;
+  const habitStreakSum=habits.reduce((s,h)=>s+getHabitStreak(h.id,d),0);
+  const avgHabitStreak=habits.length?habitStreakSum/habits.length:0;
+  const chatCount=(d.chatHistory||[]).length;
+  const goalsDone=(d.goals||[]).filter(g=>g.done).length;
+  const pbCount=(d.pbs||[]).length;
+
+  // Strength: based on workouts logged, PBs, streak
+  const str=Math.min(99,Math.round(
+    Math.min(40,workoutCount*0.8)+
+    Math.min(25,streak*0.5)+
+    Math.min(20,pbCount*2)+
+    Math.min(14,totalXP/500)
+  ));
+
+  // Discipline: based on habit streaks, sleep consistency, streak
+  const dis=Math.min(99,Math.round(
+    Math.min(40,avgHabitStreak*4)+
+    Math.min(25,streak*0.5)+
+    Math.min(20,avgSleep>6?Math.min(20,(avgSleep-6)*10):0)+
+    Math.min(14,habits.length*3)
+  ));
+
+  // Focus: based on goals done, todos completed, XP rate
+  const todoDone=(d.todos||[]).filter(t=>t.done).length;
+  const foc=Math.min(99,Math.round(
+    Math.min(40,goalsDone*5)+
+    Math.min(25,todoDone*2)+
+    Math.min(20,completedChallenges*2)+
+    Math.min(14,workoutCount*0.5)
+  ));
+
+  // Confidence: based on challenges completed, boss fights, titles, PBs
+  const bossCount=Object.keys(d.bossFightProgress||{}).length;
+  const conf=Math.min(99,Math.round(
+    Math.min(40,completedChallenges*2)+
+    Math.min(25,bossCount*5)+
+    Math.min(20,pbCount*2)+
+    Math.min(14,(d.titles||[]).length*4)
+  ));
+
+  // Wisdom: based on XP total, goals, anime/books logged
+  const animeCount=(d.anime||[]).length;
+  const wis=Math.min(99,Math.round(
+    Math.min(40,Math.min(40,totalXP/400))+
+    Math.min(25,goalsDone*3)+
+    Math.min(20,animeCount*2)+
+    Math.min(14,completedChallenges)
+  ));
+
+  const overall=Math.round((str+dis+foc+conf+wis)/5);
+  return{overall,str,dis,foc,conf,wis};
+}
+
+function getDay1Stats(d){
+  if(d.day1Stats)return d.day1Stats;
+  return{overall:38,str:34,dis:31,foc:29,conf:22,wis:27};
+}
+
+// ── MY RATING SCREEN ─────────────────────────────────────────────
+function buildRating(d){
+  const tab=state._ratingTab||"Current";
+  const cur=computeStats(d);
+  const d1=getDay1Stats(d);
+  const tabs=["Current","Potential","Day 1"];
+
+  function statCard(label,icon,score,delta,isOverall){
+    const col=isOverall?"#4ade80":"var(--fg)";
+    const bg=isOverall?"linear-gradient(135deg,rgba(74,222,128,0.18),rgba(8,10,8,0.9))":"var(--card-b)";
+    const border=isOverall?"1px solid rgba(74,222,128,0.5)":"1px solid var(--card-b)";
+    const barW=Math.round(score)+'%';
+    const deltaStr=delta>=0?'+'+delta+'▲':delta+'▼';
+    const deltaCol=delta>=0?"#4ade80":"#ef4444";
+    return'<div style="border-radius:14px;padding:16px;background:'+bg+';border:'+border+'">'+
+      '<div style="font-size:11px;color:var(--fg2);margin-bottom:6px;display:flex;align-items:center;gap:6px">'+
+        '<span style="font-size:14px">'+icon+'</span>'+
+        '<span style="font-weight:700;letter-spacing:1px">'+label+'</span>'+
+      '</div>'+
+      '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px">'+
+        '<span style="font-size:36px;font-weight:900;color:'+col+'">'+score+'</span>'+
+        '<span style="font-size:12px;font-weight:700;background:#4ade8022;border:1px solid #4ade8044;color:'+deltaCol+';border-radius:10px;padding:2px 8px">'+deltaStr+'</span>'+
+      '</div>'+
+      '<div style="background:rgba(74,222,128,0.1);border-radius:3px;height:4px">'+
+        '<div style="background:#4ade80;height:100%;border-radius:3px;width:'+barW+'"></div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  let scores,deltas;
+  if(tab==="Current"){
+    scores=cur;
+    deltas={overall:cur.overall-d1.overall,str:cur.str-d1.str,dis:cur.dis-d1.dis,foc:cur.foc-d1.foc,conf:cur.conf-d1.conf,wis:cur.wis-d1.wis};
+  }else if(tab==="Potential"){
+    scores={overall:99,str:99,dis:99,foc:99,conf:99,wis:99};
+    deltas={overall:99-cur.overall,str:99-cur.str,dis:99-cur.dis,foc:99-cur.foc,conf:99-cur.conf,wis:99-cur.wis};
+  }else{
+    scores=d1;
+    deltas={overall:0,str:0,dis:0,foc:0,conf:0,wis:0};
+  }
+
+  if(!d.protocolStartDate){
+    state.data.protocolStartDate=new Date().toISOString().split("T")[0];
+    saveData();
+  }
+  if(!d.day1Stats){
+    state.data.day1Stats=getDay1Stats(d);
+    saveData();
+  }
+
+  return'<div style="padding:16px">'+
+    '<div style="font-size:22px;font-weight:900;letter-spacing:1px;color:var(--fg);margin-bottom:4px">My Rating ⭐</div>'+
+    '<div style="font-size:12px;color:var(--fg2);margin-bottom:16px">Your rating reflects your current lifestyle.<br>Increase rating by completing tasks daily.</div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:18px">'+
+      tabs.map(t=>'<button onclick="state._ratingTab=\''+t+'\';render()" style="padding:7px 14px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px;border:1px solid '+(tab===t?"#4ade80":"var(--card-b)")+';background:'+(tab===t?"rgba(74,222,128,0.15)":"transparent")+';color:'+(tab===t?"#4ade80":"var(--fg2)")+'">'+t+'</button>').join("")+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+      '<div style="grid-column:1/-1">'+statCard("Overall","✦",scores.overall,deltas.overall,true)+'</div>'+
+      statCard("Wisdom","🧠",scores.wis,deltas.wis,false)+
+      statCard("Strength","🏋️",scores.str,deltas.str,false)+
+      statCard("Focus","🎯",scores.foc,deltas.foc,false)+
+      statCard("Confidence","🛡️",scores.conf,deltas.conf,false)+
+      statCard("Discipline","🔒",scores.dis,deltas.dis,false)+
+    '</div>'+
+    '<div style="margin-top:16px;padding:12px;border-radius:10px;background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15)">'+
+      '<div style="font-size:9px;letter-spacing:3px;color:var(--mut);margin-bottom:6px">HOW SCORES ARE CALCULATED</div>'+
+      '<div style="font-size:11px;color:var(--fg2);line-height:1.6">Strength — workouts, PBs, streak<br>Discipline — habit streaks, sleep, consistency<br>Focus — goals, tasks, challenges<br>Confidence — titles, boss fights, PBs<br>Wisdom — XP, goals completed, anime watched</div>'+
+    '</div>'+
+  '</div>';
+}
+
+// ── PHASE PROGRESS MAP ───────────────────────────────────────────
+function buildPhaseMap(d){
+  const startDate=d.protocolStartDate||new Date().toISOString().split("T")[0];
+  const start=new Date(startDate);
+  const now=new Date();
+  const dayNum=Math.min(66,Math.max(1,Math.round((now-start)/86400000)+1));
+  const pct=Math.round((dayNum/66)*100);
+  const phases=[
+    {name:"FOUNDATION",days:"1–22",end:22,col:"#4ade80"},
+    {name:"DEVELOPMENT",days:"23–44",end:44,col:"#f97316"},
+    {name:"MASTERY",days:"45–66",end:66,col:"#a855f7"},
+  ];
+  const activePhase=phases.find(p=>dayNum<=p.end)||phases[2];
+
+  return'<div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">'+
+      '<div>'+
+        '<div style="font-size:24px;font-weight:900;color:'+activePhase.col+'">DAY '+dayNum+' <span style="font-size:12px">/ 66</span></div>'+
+        '<div style="font-size:10px;color:var(--mut);letter-spacing:2px;margin-top:2px">PHASE: '+activePhase.name+'</div>'+
+      '</div>'+
+      '<div style="text-align:right"><div style="font-size:9px;color:var(--mut)">COMPLETION</div><div style="font-size:20px;font-weight:700;color:'+activePhase.col+'">'+pct+'%</div></div>'+
+    '</div>'+
+    '<div style="position:relative;background:rgba(74,222,128,0.08);border-radius:6px;height:12px;overflow:hidden;margin-bottom:10px">'+
+      '<div style="background:linear-gradient(90deg,#4ade80,'+activePhase.col+');height:100%;border-radius:6px;width:'+pct+'%;transition:width 0.5s"></div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">'+
+      phases.map(p=>{
+        const done=dayNum>p.end;const active=p===activePhase;
+        return'<div style="text-align:center;padding:8px 4px;border-radius:8px;background:'+(done?"rgba(74,222,128,0.12)":active?"rgba("+p.col.slice(1).match(/../g).map(h=>parseInt(h,16)).join(",")+",0.08)":"transparent")+';border:1px solid '+(active?p.col:done?"rgba(74,222,128,0.3)":"var(--card-b)")+'">'+
+          '<div style="font-size:8px;letter-spacing:1px;color:'+(done?"#4ade80":active?p.col:"var(--mut)")+';font-weight:700">'+(done?"✓ ":"")+p.name+'</div>'+
+          '<div style="font-size:9px;color:var(--mut)">Days '+p.days+'</div>'+
+        '</div>';
+      }).join("")+
+    '</div>'+
+    '<div style="margin-top:10px;display:flex;align-items:center;gap:6px">'+
+      '<div style="font-size:10px;color:var(--mut)">Protocol start: '+start.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})+'</div>'+
+      '<button onclick="resetProtocolDate()" style="margin-left:auto;font-size:9px;padding:3px 8px;border-radius:4px;cursor:pointer;border:1px solid rgba(74,222,128,0.2);background:transparent;color:var(--mut)">Reset</button>'+
+    '</div>'+
+  '</div>';
+}
+
+function resetProtocolDate(){
+  state.data.protocolStartDate=new Date().toISOString().split("T")[0];
+  state.data.day1Stats=computeStats(state.data);
+  saveData();showToast("Protocol reset — Day 1");render();
+}
+
+// ── UNIFIED DAILY QUESTS ─────────────────────────────────────────
+function buildQuests(d){
+  const today=new Date().toISOString().split("T")[0];
+  const todayLogs=d.habitLogs?.[today]||[];
+  const habits=d.habits||[];
+  const todos=(d.todos||[]).filter(t=>!t.done);
+  const workout=SPLIT[(state.currentDay-1)%8];
+  const isRest=workout?.type==="rest";
+  const todayKey='d'+state.currentDay+"-"+today;
+  const wLogs=d.workoutLogs?.[todayKey]||{};
+  const workoutDone=Object.keys(wLogs).some(k=>k.includes("-reps"));
+
+  const midnight=new Date();midnight.setHours(23,59,59,999);
+  const hoursLeft=Math.max(0,Math.round((midnight-new Date())/3600000));
+
+  const habitItems=habits.map(h=>{
+    const done=todayLogs.includes(h.id);
+    const streak=getHabitStreak(h.id,d);
+    return{type:"habit",id:h.id,icon:h.icon||"🔥",name:h.name,done,streak,freq:"Everyday"};
+  });
+
+  const todoItems=todos.slice(0,5).map(t=>({type:"todo",id:t.id,icon:"✅",name:t.text,done:false,freq:"One-off",priority:t.priority||"Normal"}));
+
+  const workoutItem={type:"workout",icon:isRest?"😴":"🏋️",name:isRest?"Rest Day":"Workout — "+(workout?.label||""),done:workoutDone,freq:"Everyday"};
+
+  const allItems=[workoutItem,...habitItems,...todoItems];
+  const totalDone=allItems.filter(i=>i.done).length;
+  const totalItems=allItems.length;
+
+  return'<div style="padding:16px">'+
+    '<div style="font-size:22px;font-weight:900;letter-spacing:1px;color:var(--fg);margin-bottom:4px">📋 Daily Quests</div>'+
+    '<div style="font-size:12px;color:var(--fg2);margin-bottom:14px">Complete before midnight · '+hoursLeft+'h left</div>'+
+    '<div style="display:flex;gap:10px;margin-bottom:16px">'+
+      '<div class="card" style="flex:1;padding:12px;margin-bottom:0;text-align:center">'+
+        '<div style="font-size:9px;letter-spacing:2px;color:var(--mut)">DONE</div>'+
+        '<div style="font-size:28px;font-weight:900;color:#4ade80">'+totalDone+'<span style="font-size:14px">/'+totalItems+'</span></div>'+
+      '</div>'+
+      '<div class="card" style="flex:1;padding:12px;margin-bottom:0">'+
+        '<div style="font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:4px">PROGRESS</div>'+
+        '<div style="background:rgba(74,222,128,0.1);border-radius:3px;height:8px;margin-top:6px"><div style="background:#4ade80;height:100%;border-radius:3px;width:'+Math.round(totalItems?totalDone/totalItems*100:0)+'%;transition:width 0.5s"></div></div>'+
+        '<div style="font-size:10px;color:var(--mut);margin-top:4px">'+Math.round(totalItems?totalDone/totalItems*100:0)+'%</div>'+
+      '</div>'+
+    '</div>'+
+    allItems.map(item=>{
+      const doneStyle=item.done?"opacity:0.55;":"";
+      const borderCol=item.type==="workout"?"rgba(74,222,128,0.35)":item.type==="habit"?"rgba(249,115,22,0.25)":"rgba(74,222,128,0.15)";
+      let clickAction="";
+      if(item.type==="habit")clickAction='onclick="toggleHabitLog('+item.id+')"';
+      else if(item.type==="todo")clickAction='onclick="completeTodo('+item.id+')"';
+      else if(item.type==="workout")clickAction='onclick="setTab(\'Workout\')"';
+      return'<div style="'+doneStyle+'display:flex;align-items:center;gap:12px;padding:14px;border-radius:14px;border:1px solid '+borderCol+';background:rgba(10,12,10,0.6);margin-bottom:8px;cursor:pointer" '+clickAction+'>'+
+        '<div style="width:44px;height:44px;border-radius:12px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">'+item.icon+'</div>'+
+        '<div style="flex:1">'+
+          '<div style="font-size:13px;font-weight:700;color:'+(item.done?"var(--mut)":"var(--fg)")+';text-decoration:'+(item.done?"line-through":"none")+'">'+item.name+'</div>'+
+          '<div style="display:flex;gap:8px;margin-top:4px">'+
+            '<span style="font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:8px;background:rgba(74,222,128,0.1);color:var(--mut)">'+item.freq+'</span>'+
+            (item.streak?'<span style="font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:8px;background:rgba(249,115,22,0.15);color:#f97316">🔥 '+item.streak+'d</span>':"")+
+            (item.priority&&item.priority!=="Normal"?'<span style="font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:8px;background:rgba(239,68,68,0.15);color:#ef4444">'+item.priority+'</span>':"")+
+          '</div>'+
+        '</div>'+
+        '<div style="width:26px;height:26px;border-radius:50%;border:2px solid '+(item.done?"#4ade80":"var(--card-b)")+';background:'+(item.done?"#4ade80":"transparent")+';display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">'+(item.done?"✓":"")+'</div>'+
+      '</div>';
+    }).join("")+
+    (d.hardMode?'<div style="margin-top:8px;padding:10px;border-radius:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25)"><div style="font-size:10px;letter-spacing:2px;color:#ef4444;font-weight:700">💀 HARD MODE — miss a habit = −50 XP + streak reset</div></div>':"")+
+  '</div>';
+}
+
+function completeTodo(id){
+  const t=state.data.todos.find(t=>t.id===id);
+  if(!t)return;
+  t.done=true;
+  awardXP(10,"Task completed");
+  saveData();render();
+}
+
+// ── HARD MODE ─────────────────────────────────────────────────────
+function toggleHardMode(){
+  state.data.hardMode=!state.data.hardMode;
+  saveData();
+  showToast(state.data.hardMode?"💀 Hard Mode ON — no mercy":"Hard Mode disabled");
+  render();
+}
+
+function applyHardModePenalties(d){
+  if(!d.hardMode)return;
+  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+  const yStr=yesterday.toISOString().split("T")[0];
+  const yLogs=d.habitLogs?.[yStr]||[];
+  const habits=d.habits||[];
+  let penalties=0;
+  habits.forEach(h=>{
+    if(!yLogs.includes(h.id)){
+      d.xp=Math.max(0,(d.xp||0)-50);
+      const hLogs=d.habitLogs||{};
+      const streak=getHabitStreak(h.id,{...d,habitLogs:hLogs});
+      if(streak>0){
+        const dayBefore=new Date(yesterday);dayBefore.setDate(dayBefore.getDate()-1);
+        const dbStr=dayBefore.toISOString().split("T")[0];
+        if(!(hLogs[dbStr]||[]).includes(h.id)){
+          // streak already 0 or 1, no need to reset
+        }
+      }
+      penalties++;
+    }
+  });
+  if(penalties>0)showToast("💀 Hard Mode: −"+(penalties*50)+" XP for "+penalties+" missed habits");
+}
+
+// ── FOCUS / POMODORO ─────────────────────────────────────────────
+function buildFocus(d){
+  const p=state.pomodoro;
+  const m=Math.floor(p.seconds/60),s=p.seconds%60;
+  const pct=p.totalSeconds?Math.round((1-p.seconds/p.totalSeconds)*100):0;
+  const r=70,circ=2*Math.PI*r,dash=((100-pct)/100)*circ;
+  const col=p.mode==="work"?"#4ade80":"#f97316";
+  const modeLabel=p.mode==="work"?"FOCUS":"BREAK";
+  return'<div style="padding:16px">'+
+    '<div style="font-size:22px;font-weight:900;letter-spacing:1px;color:var(--fg);margin-bottom:4px">⏱ Focus Timer</div>'+
+    '<div style="font-size:12px;color:var(--fg2);margin-bottom:20px">Pomodoro technique — work in focused bursts</div>'+
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:20px">'+
+      '<div style="position:relative">'+
+        '<svg width="180" height="180" viewBox="0 0 180 180">'+
+          '<circle cx="90" cy="90" r="'+r+'" fill="none" stroke="rgba(74,222,128,0.1)" stroke-width="10"/>'+
+          '<circle cx="90" cy="90" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="10" stroke-dasharray="'+dash+' '+circ+'" stroke-linecap="round" transform="rotate(-90 90 90)"/>'+
+          '<text x="90" y="82" text-anchor="middle" fill="'+col+'" font-size="36" font-weight="900">'+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0")+'</text>'+
+          '<text x="90" y="104" text-anchor="middle" fill="var(--mut)" font-size="11" letter-spacing="3">'+modeLabel+'</text>'+
+          '<text x="90" y="118" text-anchor="middle" fill="var(--mut)" font-size="9">ROUND '+p.round+'</text>'+
+        '</svg>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px">'+
+        (p.active
+          ?'<button onclick="stopPomodoro()" class="btn" style="padding:12px 24px;background:rgba(239,68,68,0.15);border-color:#ef4444;color:#ef4444">⏸ PAUSE</button>'
+          :'<button onclick="startPomodoro()" class="btn" style="padding:12px 28px;font-size:14px">▶ START</button>')+
+        '<button onclick="resetPomodoro()" style="padding:12px 16px;border-radius:8px;cursor:pointer;border:1px solid var(--card-b);background:transparent;color:var(--fg2)">↺ RESET</button>'+
+      '</div>'+
+      '<div class="card" style="width:100%;max-width:340px">'+
+        '<div class="sec-title">CUSTOMISE</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
+          '<div><div style="font-size:10px;color:var(--fg2);margin-bottom:4px">Work (mins)</div>'+
+            '<input class="inp" type="number" min="1" max="90" value="'+p.workMins+'" onchange="state.pomodoro.workMins=parseInt(this.value)||25;resetPomodoro()"></div>'+
+          '<div><div style="font-size:10px;color:var(--fg2);margin-bottom:4px">Break (mins)</div>'+
+            '<input class="inp" type="number" min="1" max="30" value="'+p.breakMins+'" onchange="state.pomodoro.breakMins=parseInt(this.value)||5;resetPomodoro()"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="card" style="width:100%;max-width:340px">'+
+        '<div class="sec-title">ROUNDS TODAY</div>'+
+        '<div style="font-size:28px;font-weight:700;color:#4ade80;text-align:center">'+(p.round-1)+'</div>'+
+        '<div style="font-size:10px;color:var(--mut);text-align:center">completed</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+
+function startPomodoro(){
+  if(state.pomodoro.intervalId)clearInterval(state.pomodoro.intervalId);
+  state.pomodoro.active=true;
+  state.pomodoro.intervalId=setInterval(()=>{
+    if(state.pomodoro.seconds<=0){
+      clearInterval(state.pomodoro.intervalId);
+      state.pomodoro.intervalId=null;
+      if(state.pomodoro.mode==="work"){
+        state.pomodoro.mode="break";
+        state.pomodoro.seconds=state.pomodoro.breakMins*60;
+        state.pomodoro.totalSeconds=state.pomodoro.breakMins*60;
+        showToast("🧘 Break time! "+state.pomodoro.breakMins+" minutes");
+        if(Notification.permission==="granted")new Notification("Break Time!",{body:"Well done — take a "+state.pomodoro.breakMins+" minute break.",icon:""});
+      }else{
+        state.pomodoro.round++;
+        state.pomodoro.mode="work";
+        state.pomodoro.seconds=state.pomodoro.workMins*60;
+        state.pomodoro.totalSeconds=state.pomodoro.workMins*60;
+        showToast("🔥 Focus session "+state.pomodoro.round+" — let's go!");
+        awardXP(15,"Pomodoro session completed");
+        if(Notification.permission==="granted")new Notification("Focus Time!",{body:"Break over — back to work!",icon:""});
+      }
+      state.pomodoro.active=false;
+      render();return;
+    }
+    state.pomodoro.seconds--;
+    if(state.tab==="Focus")render();
+  },1000);
+}
+
+function stopPomodoro(){
+  if(state.pomodoro.intervalId)clearInterval(state.pomodoro.intervalId);
+  state.pomodoro.intervalId=null;
+  state.pomodoro.active=false;
+  render();
+}
+
+function resetPomodoro(){
+  stopPomodoro();
+  state.pomodoro.mode="work";
+  state.pomodoro.seconds=state.pomodoro.workMins*60;
+  state.pomodoro.totalSeconds=state.pomodoro.workMins*60;
+  render();
+}
+
+// ── HABIT LIBRARY ─────────────────────────────────────────────────
+const HABIT_LIBRARY=[
+  {icon:"🛏️",name:"Make Bed"},
+  {icon:"💧",name:"Drink 2L Water"},
+  {icon:"🚶",name:"10,000 Steps"},
+  {icon:"📖",name:"Read 30 Pages"},
+  {icon:"🧘",name:"10 Min Meditation"},
+  {icon:"🥗",name:"Eat Clean"},
+  {icon:"🌅",name:"No Phone First Hour"},
+  {icon:"💊",name:"Take Supplements"},
+  {icon:"🌙",name:"In Bed by 10:30pm"},
+  {icon:"✍️",name:"Journal Entry"},
+  {icon:"❄️",name:"Cold Shower"},
+  {icon:"🧹",name:"Clean Space"},
+];
+
+function buildHabitLibrary(d){
+  const habits=d.habits||[];
+  const existingNames=habits.map(h=>h.name.toLowerCase());
+  const available=HABIT_LIBRARY.filter(h=>!existingNames.includes(h.name.toLowerCase()));
+  if(!available.length)return"";
+  return'<div class="card"><div class="sec-title">QUICK ADD — HABIT LIBRARY</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
+    available.map(h=>'<button onclick="quickAddHabit(\''+h.icon+'\',\''+h.name+'\')" style="display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:10px;cursor:pointer;border:1px solid rgba(74,222,128,0.2);background:rgba(74,222,128,0.05);color:var(--fg2);font-size:11px;font-weight:600"><span>'+h.icon+'</span>'+h.name+'</button>').join("")+
+    '</div>'+
+  '</div>';
+}
+
+function quickAddHabit(icon,name){
+  const id=Date.now();
+  state.data.habits.push({id,icon,name});
+  saveData();showToast("Added: "+icon+" "+name);render();
 }
 
 loadState();
