@@ -1,0 +1,11 @@
+{
+  "name": "My Library",
+  "short_name": "Library",
+  "description": "Personal book tracker",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080a08",
+  "theme_color": "#080a08",
+  "start_url": "/The-Legend-Protocol/books.html",
+  "scope": "/The-Legend-Protocol/"
+}
