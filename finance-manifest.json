@@ -1,0 +1,11 @@
+{
+  "name": "Finance",
+  "short_name": "Finance",
+  "description": "Personal finance dashboard",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "start_url": "/The-Legend-Protocol/finance.html",
+  "scope": "/The-Legend-Protocol/"
+}

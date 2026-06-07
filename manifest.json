@@ -1,0 +1,11 @@
+{
+  "name": "The Legend Protocol",
+  "short_name": "Legend",
+  "description": "Personal fitness tracker",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080a08",
+  "theme_color": "#080a08",
+  "start_url": "/The-Legend-Protocol/",
+  "scope": "/The-Legend-Protocol/"
+}
