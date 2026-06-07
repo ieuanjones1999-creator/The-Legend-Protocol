@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#080a08">
+<title>My Library</title>
+<style>
+:root {
+  --bg:           #080a08;
+  --bg2:          #0d0f0d;
+  --card:         #111411;
+  --card2:        #1a1d1a;
+  --border:       rgba(74,222,128,0.18);
+  --border-hi:    rgba(74,222,128,0.42);
+  --text:         #e8e0d0;
+  --text2:        #6b7280;
+  --accent:       #4ade80;
+  --accent2:      #22c55e;
+  --red:          #f87171;
+  --modal-bg:     rgba(0,0,0,0.78);
+  --shadow:       0 2px 18px rgba(0,0,0,0.65);
+  --manga-accent: #c2410c;
+  --manga-hi:     rgba(194,65,12,0.42);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+::-webkit-scrollbar { width: 0; height: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Georgia, 'Times New Roman', serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── HEADER ─────────────────────────────────────────────────────────────── */
+.hdr {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 11px 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.hdr-title {
+  font-size: 20px; font-weight: 700; letter-spacing: -0.4px;
+  color: var(--accent); flex-shrink: 0; margin-right: 4px;
+}
+.manga-mode .hdr-title { color: var(--manga-accent); }
+.hdr-right { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+.hbtn {
+  background: var(--card); border: 1px solid var(--border); color: var(--text2);
+  border-radius: 8px; padding: 5px 9px; font-size: 11px; cursor: pointer;
+  font-family: Georgia, serif; white-space: nowrap; transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+.hbtn:hover  { background: var(--card2); color: var(--text); }
+.hbtn.active { background: var(--card2); border-color: var(--border-hi); color: var(--accent); }
+.manga-mode .hbtn.active { border-color: var(--manga-hi); color: var(--manga-accent); }
+.hbtn.mode-on { border-color: var(--manga-hi); color: var(--manga-accent); }
+.sort-sel {
+  background: var(--card); border: 1px solid var(--border); color: var(--text2);
+  border-radius: 8px; padding: 5px 9px; font-size: 11px; cursor: pointer;
+  font-family: Georgia, serif; -webkit-appearance: none; outline: none;
+  transition: border-color 0.15s;
+}
+.sort-sel:focus { border-color: var(--border-hi); }
+
+/* ─── SHELF TABS ─────────────────────────────────────────────────────────── */
+.shelf-tabs {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: var(--bg2); border-top: 1px solid var(--border);
+  display: flex; overflow-x: auto; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.shelf-tabs::-webkit-scrollbar { display: none; }
+.tab-btn {
+  flex: 1; min-width: 72px; padding: 9px 6px 10px;
+  font-size: 10px; background: none; border: none; color: var(--text2);
+  cursor: pointer; font-family: Georgia, serif;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  transition: color 0.15s; border-top: 2px solid transparent;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.tab-btn .ti { font-size: 15px; }
+.tab-btn.active { color: var(--accent); border-top-color: var(--accent); }
+.manga-mode .tab-btn.active { color: var(--manga-accent); border-top-color: var(--manga-accent); }
+
+/* ─── CONTENT ────────────────────────────────────────────────────────────── */
+.content { padding: 14px; padding-bottom: 88px; }
+
+/* ─── EMPTY STATE ────────────────────────────────────────────────────────── */
+.empty {
+  text-align: center; padding: 64px 20px; color: var(--text2);
+}
+.empty .ei { font-size: 52px; margin-bottom: 14px; }
+.empty p   { font-size: 14px; line-height: 1.7; }
+.empty .eh { font-size: 12px; margin-top: 8px; opacity: 0.65; }
+
+/* ─── BOOKCASE ───────────────────────────────────────────────────────────── */
+.shelf-row { margin-bottom: 0; }
+.books-row {
+  display: flex; align-items: flex-end; gap: 3px;
+  padding: 14px 10px 0; min-height: 210px;
+  background: rgba(0,0,0,0.22);
+}
+.manga-mode .books-row { min-height: 268px; direction: rtl; }
+.shelf-plank {
+  height: 18px;
+  background: linear-gradient(180deg, #9a6f42 0%, #7a5230 22%, #6b4826 60%, #4a2e10 100%);
+  box-shadow: 0 5px 16px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.13);
+  border-radius: 0 0 1px 1px; position: relative; overflow: hidden;
+}
+.shelf-plank::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 40%, transparent 100%);
+}
+.fav-bookcase .shelf-plank {
+  background: linear-gradient(180deg, #c8960a 0%, #a07420 22%, #8b6310 60%, #6b4a08 100%);
+  box-shadow: 0 5px 16px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,200,0,0.22), 0 0 14px rgba(160,120,0,0.14);
+}
+
+/* ─── BOOK SPINE ─────────────────────────────────────────────────────────── */
+.spine {
+  position: relative; cursor: pointer;
+  border-radius: 2px 2px 0 0; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transform-origin: bottom center;
+  transform: rotate(var(--tilt, 0deg));
+  box-shadow: 2px 0 10px rgba(0,0,0,0.55), inset -3px 0 8px rgba(0,0,0,0.3);
+}
+.spine::after {
+  content: '';
+  position: absolute; top: 0; left: 0; bottom: 0; width: 38%;
+  background: linear-gradient(90deg, rgba(255,255,255,0.09) 0%, transparent 100%);
+  pointer-events: none;
+}
+.spine:hover {
+  transform: translateY(-16px) rotate(var(--tilt, 0deg));
+  box-shadow: 4px 0 22px rgba(0,0,0,0.85), inset -3px 0 8px rgba(0,0,0,0.3);
+  z-index: 10;
+}
+.spine.pulled {
+  transform: translateY(-28px) rotate(var(--tilt, 0deg));
+  box-shadow: 6px 0 32px rgba(0,0,0,0.9), inset -3px 0 8px rgba(0,0,0,0.3);
+  z-index: 20;
+}
+.spine-inner {
+  writing-mode: vertical-rl; text-orientation: mixed;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 3px; gap: 5px;
+  height: 100%; width: 100%; overflow: hidden;
+  direction: ltr;
+}
+.s-title {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.3px;
+  color: rgba(255,255,255,0.92); text-align: center;
+  overflow: hidden; flex-shrink: 1; word-break: break-word;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+  display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical;
+}
+.s-author {
+  font-size: 7px; color: rgba(255,255,255,0.58); flex-shrink: 1;
+  overflow: hidden; word-break: break-word; text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+}
+.s-stars { font-size: 7px; color: rgba(255,210,60,0.85); margin-top: auto; flex-shrink: 0; }
+.bookmark {
+  position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+  width: 8px; height: 22px;
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 -2px 8px rgba(239,68,68,0.55);
+  z-index: 5;
+}
+
+/* ─── YEAR CHIP ──────────────────────────────────────────────────────────── */
+.yr-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(74,222,128,0.09); border: 1px solid var(--border-hi);
+  color: var(--accent); border-radius: 20px; padding: 4px 12px 4px 10px;
+  font-size: 12px; margin-bottom: 12px; cursor: pointer;
+  font-family: Georgia, serif;
+}
+.manga-mode .yr-chip { background: rgba(194,65,12,0.09); border-color: var(--manga-hi); color: var(--manga-accent); }
+
+/* ─── DETAIL PANEL ───────────────────────────────────────────────────────── */
+.det-overlay {
+  position: fixed; inset: 0; z-index: 190;
+  background: rgba(0,0,0,0.42); display: none;
+}
+.det-overlay.on { display: block; }
+.det-panel {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(356px, 93vw);
+  background: rgba(7,9,7,0.98);
+  backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+  border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.4,0,0.2,1);
+  z-index: 200; overflow-y: auto; padding: 18px 16px 32px;
+}
+.det-panel.on { transform: translateX(0); }
+.det-top { display: flex; gap: 14px; margin-bottom: 16px; align-items: flex-start; }
+.det-cover {
+  width: 76px; height: 116px; border-radius: 4px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; border: 1px solid var(--border);
+  box-shadow: 4px 4px 14px rgba(0,0,0,0.65);
+  overflow: hidden;
+}
+.det-cover img { width: 100%; height: 100%; object-fit: cover; }
+.det-info { flex: 1; min-width: 0; }
+.det-close {
+  position: absolute; top: 14px; right: 14px;
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  width: 30px; height: 30px; border-radius: 50%; font-size: 17px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; z-index: 1;
+}
+.det-title  { font-size: 17px; font-weight: 700; line-height: 1.25; margin-bottom: 4px; padding-right: 36px; }
+.det-author { font-size: 13px; color: var(--accent); margin-bottom: 8px; }
+.manga-mode .det-author { color: var(--manga-accent); }
+.det-stars  { font-size: 17px; color: #fbbf24; margin-bottom: 8px; }
+.det-tags   { display: flex; flex-wrap: wrap; gap: 5px; }
+.det-tag {
+  font-size: 9px; padding: 3px 7px; border-radius: 10px;
+  background: var(--card2); border: 1px solid var(--border);
+  color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px;
+}
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 14px; }
+.info-cell { background: var(--card); border-radius: 8px; padding: 10px 10px 8px; border: 1px solid var(--border); }
+.info-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text2); margin-bottom: 3px; }
+.info-val { font-size: 13px; font-weight: 700; color: var(--text); }
+.sec-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text2); margin-bottom: 6px; font-weight: 700; }
+.sec-box {
+  font-size: 13px; line-height: 1.65; color: var(--text);
+  background: var(--card); border-radius: 8px; padding: 10px 12px;
+  border: 1px solid var(--border); white-space: pre-wrap; margin-bottom: 14px;
+}
+.quote-card {
+  font-size: 12px; font-style: italic; color: var(--text);
+  background: var(--card); border-left: 3px solid var(--accent);
+  padding: 9px 12px; border-radius: 0 8px 8px 0; margin-bottom: 7px;
+  line-height: 1.55;
+}
+.manga-mode .quote-card { border-left-color: var(--manga-accent); }
+.det-actions { display: flex; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.det-edit {
+  flex: 1; background: var(--card2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 10px; padding: 10px;
+  font-size: 13px; cursor: pointer; font-family: Georgia, serif;
+}
+.det-del {
+  flex: 1; background: rgba(127,29,29,0.28); border: 1px solid rgba(248,113,113,0.28);
+  color: var(--red); border-radius: 10px; padding: 10px;
+  font-size: 13px; cursor: pointer; font-family: Georgia, serif;
+}
+
+/* ─── STATS ──────────────────────────────────────────────────────────────── */
+.stats-ttl { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text2); margin-bottom: 11px; font-weight: 700; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 12px; text-align: center;
+}
+.stat-val { font-size: 30px; font-weight: 700; color: var(--accent); line-height: 1; margin-bottom: 4px; }
+.manga-mode .stat-val { color: var(--manga-accent); }
+.stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text2); }
+.stat-sub { font-size: 11px; color: var(--text); margin-top: 4px; }
+.badges { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+.badge {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 10px; text-align: center;
+}
+.badge.on { border-color: var(--border-hi); background: rgba(74,222,128,0.06); }
+.manga-mode .badge.on { border-color: var(--manga-hi); background: rgba(194,65,12,0.06); }
+.badge:not(.on) .b-icon { filter: grayscale(1) opacity(0.35); }
+.badge:not(.on) .b-name { color: var(--text2); }
+.b-icon { font-size: 22px; margin-bottom: 6px; }
+.b-name { font-size: 11px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.b-desc { font-size: 10px; color: var(--text2); line-height: 1.4; }
+
+/* ─── TIMELINE ───────────────────────────────────────────────────────────── */
+.yr-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 13px 15px; margin-bottom: 8px;
+  cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.yr-row:hover  { background: var(--card2); }
+.yr-row.active { border-color: var(--border-hi); background: rgba(74,222,128,0.05); }
+.manga-mode .yr-row.active { border-color: var(--manga-hi); background: rgba(194,65,12,0.05); }
+.yr-num   { font-size: 20px; font-weight: 700; min-width: 48px; }
+.yr-bar   { flex: 1; height: 5px; background: var(--card2); border-radius: 3px; overflow: hidden; }
+.yr-fill  { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.5s; }
+.manga-mode .yr-fill { background: var(--manga-accent); }
+.yr-cnt   { font-size: 13px; color: var(--accent); min-width: 56px; text-align: right; font-weight: 600; }
+.manga-mode .yr-cnt { color: var(--manga-accent); }
+
+/* ─── MODAL ──────────────────────────────────────────────────────────────── */
+.modal-wrap {
+  position: fixed; inset: 0; z-index: 300;
+  background: var(--modal-bg);
+  backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.modal-wrap.off { display: none; }
+.modal {
+  background: var(--bg2); border-radius: 20px 20px 0 0;
+  width: 100%; max-width: 600px; max-height: 92vh; overflow-y: auto;
+  padding: 20px 18px 32px;
+  border-top: 1px solid var(--border);
+  animation: slideUp 0.24s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal-hdr {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 18px;
+}
+.modal-ttl { font-size: 18px; font-weight: 700; color: var(--accent); }
+.manga-mode .modal-ttl { color: var(--manga-accent); }
+.m-close {
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  width: 28px; height: 28px; border-radius: 50%; font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.field { margin-bottom: 13px; }
+.field label { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text2); margin-bottom: 5px; }
+.field input, .field select, .field textarea {
+  width: 100%; background: var(--card); border: 1px solid var(--border);
+  color: var(--text); border-radius: 10px; padding: 10px 11px;
+  font-size: 14px; font-family: Georgia, serif; outline: none;
+  -webkit-appearance: none; transition: border-color 0.15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--border-hi); }
+.field textarea { resize: none; height: 78px; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stars-row { display: flex; gap: 8px; }
+.star {
+  font-size: 26px; cursor: pointer; color: var(--text2);
+  transition: color 0.1s, transform 0.1s;
+  -webkit-user-select: none; user-select: none;
+}
+.star.lit       { color: #fbbf24; }
+.star:hover     { transform: scale(1.2); }
+.submit-btn {
+  width: 100%; background: var(--accent2); color: #080a08;
+  border: none; border-radius: 12px; padding: 14px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  font-family: Georgia, serif; margin-top: 4px; transition: opacity 0.15s;
+}
+.submit-btn:hover  { opacity: 0.88; }
+.manga-mode .submit-btn { background: var(--manga-accent); color: #fff; }
+
+/* ─── CONFIRM ────────────────────────────────────────────────────────────── */
+.confirm-wrap {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(0,0,0,0.82);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.confirm-wrap.off { display: none; }
+.confirm-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 16px; padding: 26px 20px; max-width: 300px; width: 100%; text-align: center;
+}
+.confirm-ttl { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.confirm-sub { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+.confirm-row { display: flex; gap: 10px; }
+.c-cancel { flex: 1; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 12px; font-size: 14px; cursor: pointer; font-family: Georgia, serif; }
+.c-del    { flex: 1; background: rgba(127,29,29,0.45); border: 1px solid rgba(248,113,113,0.3); color: var(--red); border-radius: 10px; padding: 12px; font-size: 14px; cursor: pointer; font-family: Georgia, serif; }
+
+/* ─── FAB ────────────────────────────────────────────────────────────────── */
+.fab {
+  position: fixed; bottom: 74px; right: 18px; z-index: 150;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--accent); color: #080a08; border: none;
+  font-size: 28px; cursor: pointer;
+  box-shadow: 0 4px 18px rgba(74,222,128,0.42);
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.fab:hover { transform: scale(1.08); }
+.manga-mode .fab { background: var(--manga-accent); box-shadow: 0 4px 18px rgba(194,65,12,0.42); }
+
+@media (max-width: 380px) {
+  .det-panel { width: 100vw; border-left: none; }
+  .stats-grid, .badges { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ─── DETAIL PANEL ────────────────────────────────────────────────────────── -->
+<div class="det-overlay" id="det-overlay" onclick="closeDetail()"></div>
+<div class="det-panel" id="det-panel">
+  <button class="det-close" onclick="closeDetail()">×</button>
+  <div class="det-top">
+    <div class="det-cover" id="dp-cover"></div>
+    <div class="det-info">
+      <div class="det-title"  id="dp-title"></div>
+      <div class="det-author" id="dp-author"></div>
+      <div class="det-stars"  id="dp-stars"></div>
+      <div class="det-tags"   id="dp-tags"></div>
+    </div>
+  </div>
+  <div class="info-grid" id="dp-grid"></div>
+  <div id="dp-review-wrap">
+    <div class="sec-lbl">My Review</div>
+    <div class="sec-box" id="dp-review"></div>
+  </div>
+  <div id="dp-quotes-wrap">
+    <div class="sec-lbl">Favourite Quotes</div>
+    <div id="dp-quotes"></div>
+  </div>
+  <div class="det-actions">
+    <button class="det-edit" onclick="startEdit()">Edit</button>
+    <button class="det-del"  onclick="askDelete()">Delete</button>
+  </div>
+</div>
+
+<!-- ─── ADD / EDIT MODAL ────────────────────────────────────────────────────── -->
+<div class="modal-wrap off" id="modal-wrap" onclick="overlayClose(event)">
+  <div class="modal" id="modal">
+    <div class="modal-hdr">
+      <span class="modal-ttl" id="modal-ttl">Add Book</span>
+      <button class="m-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Title *</label>
+        <input id="f-title" type="text" placeholder="Book title" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label>Author</label>
+        <input id="f-author" type="text" placeholder="Author name" autocomplete="off" />
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Genre</label>
+        <select id="f-genre">
+          <option>Fantasy</option><option>Sci-Fi</option><option>Fiction</option>
+          <option>Non-Fiction</option><option>Mystery</option><option>Romance</option>
+          <option>Horror</option><option>Manga</option><option>Biography</option>
+          <option>Self-Help</option><option>Other</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Pages</label>
+        <input id="f-pages" type="number" placeholder="350" min="1" inputmode="numeric" />
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Shelf</label>
+        <select id="f-status">
+          <option value="finished">Finished</option>
+          <option value="reading">Currently Reading</option>
+          <option value="wishlist">Wishlist</option>
+          <option value="favorite">Favourite</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Format</label>
+        <select id="f-type">
+          <option value="book">Book</option>
+          <option value="manga">Manga / Comic</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Date Started</label>
+        <input id="f-start" type="date" />
+      </div>
+      <div class="field">
+        <label>Date Finished</label>
+        <input id="f-end" type="date" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Rating</label>
+      <div class="stars-row" id="stars-row">
+        <span class="star" data-v="1" onclick="setRating(1)">★</span>
+        <span class="star" data-v="2" onclick="setRating(2)">★</span>
+        <span class="star" data-v="3" onclick="setRating(3)">★</span>
+        <span class="star" data-v="4" onclick="setRating(4)">★</span>
+        <span class="star" data-v="5" onclick="setRating(5)">★</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>My Review</label>
+      <textarea id="f-review" placeholder="What did you think?"></textarea>
+    </div>
+    <div class="field">
+      <label>Favourite Quotes (one per line)</label>
+      <textarea id="f-quotes" placeholder="A quote…&#10;Another quote…" style="height:64px"></textarea>
+    </div>
+    <div class="field">
+      <label>Cover Image URL (optional)</label>
+      <input id="f-cover" type="url" placeholder="https://…" />
+    </div>
+    <button class="submit-btn" id="submit-btn" onclick="submitBook()">Add Book</button>
+  </div>
+</div>
+
+<!-- ─── DELETE CONFIRM ──────────────────────────────────────────────────────── -->
+<div class="confirm-wrap off" id="confirm-wrap">
+  <div class="confirm-box">
+    <div class="confirm-ttl">Delete book?</div>
+    <div class="confirm-sub">This cannot be undone.</div>
+    <div class="confirm-row">
+      <button class="c-cancel" onclick="closeConfirm()">Cancel</button>
+      <button class="c-del"    onclick="doDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── MAIN APP ────────────────────────────────────────────────────────────── -->
+<div id="app"></div>
+<button class="fab" onclick="openModal()">+</button>
+
+<script>
+/* ─── CONSTANTS ────────────────────────────────────────────────────────────── */
+const KEY = 'legend-books-v1';
+
+const GENRE_COLOR = {
+  Fantasy:'#7b4f9e', 'Sci-Fi':'#2563eb', Fiction:'#b45309',
+  'Non-Fiction':'#166534', Mystery:'#374151', Romance:'#be185d',
+  Horror:'#7f1d1d', Manga:'#c2410c', Biography:'#92400e',
+  'Self-Help':'#0e7490', Other:'#4b5563'
+};
+const GENRE_ICON = {
+  Fantasy:'🧙','Sci-Fi':'🚀',Fiction:'📖','Non-Fiction':'📰',
+  Mystery:'🔍',Romance:'💕',Horror:'💀',Manga:'⛩️',
+  Biography:'👤','Self-Help':'💡',Other:'📚'
+};
+const SHELF_LABEL = { finished:'Finished', reading:'Reading', wishlist:'Wishlist', favorite:'Favourites' };
+
+/* ─── STATE ────────────────────────────────────────────────────────────────── */
+let S = {
+  books: [],
+  mangaMode: false,
+  sortBy: 'date',
+  tab: 'finished',
+  view: 'shelf',
+  yearFilter: null,
+  selId: null,
+  pendingDel: null,
+  editId: null,
+  rating: 0,
+};
+
+/* ─── STORAGE ──────────────────────────────────────────────────────────────── */
+const db = {
+  get(k){ try{ const r=localStorage.getItem(k); return r?JSON.parse(r):null; }catch{ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
+};
+function load(){
+  const d = db.get(KEY);
+  if(d){ S.books=d.books||[]; S.mangaMode=!!d.mangaMode; S.sortBy=d.sortBy||'date'; }
+}
+function save(){
+  db.set(KEY,{ books:S.books, mangaMode:S.mangaMode, sortBy:S.sortBy });
+}
+function uid(){
+  return Date.now().toString(36)+Math.random().toString(36).slice(2);
+}
+
+/* ─── HELPERS ──────────────────────────────────────────────────────────────── */
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function tilt(id){
+  let h=0; for(let i=0;i<id.length;i++) h=(h*31+id.charCodeAt(i))&0xffffffff;
+  return (((h%7)+7)%7)-3;
+}
+
+function spineW(pages,manga){
+  const p=parseInt(pages)||200;
+  return manga ? Math.max(12,Math.min(28,Math.round(p/22))) : Math.max(22,Math.min(58,Math.round(p/16)));
+}
+function spineH(manga){ return manga?242:182; }
+
+function stars(n,max=5){
+  let s='';
+  for(let i=1;i<=max;i++) s+=`<span style="color:${i<=n?'#fbbf24':'#374151'}">★</span>`;
+  return s;
+}
+
+function readTime(p){
+  if(!p) return '—';
+  const h=Math.round(parseInt(p)/50);
+  return h<1?'< 1 hr':h===1?'~ 1 hr':`~ ${h} hrs`;
+}
+
+function fmtDate(d){
+  if(!d) return '—';
+  try{
+    const dt=new Date(d+'T00:00:00');
+    return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  }catch{ return d; }
+}
+
+function perRow(){
+  return Math.max(4, Math.floor((window.innerWidth-28)/40));
+}
+
+/* ─── FILTER / SORT ────────────────────────────────────────────────────────── */
+function filtered(){
+  return sorted(S.books.filter(b=>{
+    if(b.status!==S.tab) return false;
+    if(S.yearFilter){
+      const y=b.dateFinished?b.dateFinished.slice(0,4):(b.dateStarted?b.dateStarted.slice(0,4):null);
+      if(y!==String(S.yearFilter)) return false;
+    }
+    return true;
+  }));
+}
+
+function sorted(arr){
+  return [...arr].sort((a,b)=>{
+    if(S.sortBy==='date'){
+      const da=a.dateFinished||a.dateStarted||'0';
+      const db2=b.dateFinished||b.dateStarted||'0';
+      return db2.localeCompare(da);
+    }
+    if(S.sortBy==='rating') return (b.rating||0)-(a.rating||0);
+    if(S.sortBy==='author') return (a.author||'').localeCompare(b.author||'');
+    if(S.sortBy==='genre')  return (a.genre||'').localeCompare(b.genre||'');
+    return 0;
+  });
+}
+
+/* ─── STATS ────────────────────────────────────────────────────────────────── */
+function calcStats(){
+  const done=S.books.filter(b=>b.status==='finished'||b.status==='favorite');
+  const total=done.length;
+  const pages=done.reduce((s,b)=>s+(parseInt(b.pages)||0),0);
+  const avgR =total?(done.reduce((s,b)=>s+(b.rating||0),0)/total).toFixed(1):'0.0';
+  const aC={}, gC={};
+  done.forEach(b=>{ if(b.author)aC[b.author]=(aC[b.author]||0)+1; if(b.genre)gC[b.genre]=(gC[b.genre]||0)+1; });
+  const topA=Object.entries(aC).sort((a,b)=>b[1]-a[1])[0];
+  const topG=Object.entries(gC).sort((a,b)=>b[1]-a[1])[0];
+  return { total, pages, avgR, topA:topA?topA[0]:'—', topG:topG?topG[0]:'—' };
+}
+
+function achievements(st){
+  const bw=S.mangaMode?'Vols':'Books';
+  const allDone=S.books.filter(b=>b.status==='finished'||b.status==='favorite');
+  const genres=new Set(allDone.map(b=>b.genre).filter(Boolean));
+  const reviews=S.books.filter(b=>b.review&&b.review.length>10).length;
+  const qTotal=S.books.reduce((s,b)=>s+(b.quotes||[]).length,0);
+  return [
+    {name:`First ${S.mangaMode?'Volume':'Book'}`, icon:'📖', desc:'Log your first book',      on:st.total>=1},
+    {name:`10 ${bw}`,      icon:'📚', desc:`Finish 10 ${bw.toLowerCase()}`,  on:st.total>=10},
+    {name:`50 ${bw}`,      icon:'🏛️', desc:`Finish 50 ${bw.toLowerCase()}`,  on:st.total>=50},
+    {name:`100 ${bw}`,     icon:'🎖️', desc:`Finish 100 ${bw.toLowerCase()}`, on:st.total>=100},
+    {name:'Five Stars',    icon:'⭐', desc:'Rate a book 5 stars',              on:S.books.some(b=>b.rating===5)},
+    {name:'Multi-Genre',   icon:'🌈', desc:'Read 5 different genres',          on:genres.size>=5},
+    {name:'Critic',        icon:'✍️', desc:'Write 5 reviews',                  on:reviews>=5},
+    {name:'Quote Hunter',  icon:'💬', desc:'Save 10 favourite quotes',         on:qTotal>=10},
+  ];
+}
+
+function byYear(){
+  const m={};
+  S.books.forEach(b=>{
+    const y=b.dateFinished?b.dateFinished.slice(0,4):(b.dateStarted?b.dateStarted.slice(0,4):null);
+    if(y){ if(!m[y])m[y]=[]; m[y].push(b); }
+  });
+  return Object.entries(m).sort((a,b)=>b[0]-a[0]);
+}
+
+/* ─── BUILD HTML ───────────────────────────────────────────────────────────── */
+function buildHeader(){
+  const views=[['shelf','📚'],['stats','📊'],['timeline','📅']];
+  return `<div class="hdr">
+    <span class="hdr-title">My Library</span>
+    <div class="hdr-right">
+      ${views.map(([v,ic])=>`<button class="hbtn${S.view===v?' active':''}" onclick="setView('${v}')">${ic}</button>`).join('')}
+      ${S.view==='shelf'?`<select class="sort-sel" onchange="setSort(this.value)">
+        ${['date','rating','author','genre'].map(s=>`<option value="${s}"${S.sortBy===s?' selected':''}>${s[0].toUpperCase()+s.slice(1)}</option>`).join('')}
+      </select>`:''}
+      <button class="hbtn${S.mangaMode?' mode-on':''}" onclick="toggleManga()">${S.mangaMode?'📕':'📗'}</button>
+    </div>
+  </div>`;
+}
+
+function buildTabs(){
+  const tabs=[
+    {id:'finished',icon:'✓',lbl:'Finished'},
+    {id:'reading', icon:'📖',lbl:'Reading'},
+    {id:'wishlist',icon:'🔖',lbl:'Wishlist'},
+    {id:'favorite',icon:'⭐',lbl:'Favourites'},
+  ];
+  return `<div class="shelf-tabs">
+    ${tabs.map(t=>`<button class="tab-btn${S.tab===t.id?' active':''}" onclick="setTab('${t.id}')">
+      <span class="ti">${t.icon}</span>${t.lbl}
+    </button>`).join('')}
+  </div>`;
+}
+
+function buildSpine(b){
+  const manga=b.isManga||b.type==='manga';
+  const w=spineW(b.pages,manga), h=spineH(manga);
+  const col=GENRE_COLOR[b.genre]||'#4b5563';
+  const t=tilt(b.id);
+  const bm=b.status==='reading'?'<div class="bookmark"></div>':'';
+  const sr=b.rating?'★'.repeat(b.rating):'';
+  return `<div class="spine" id="sp-${b.id}" data-id="${b.id}"
+    style="width:${w}px;height:${h}px;background:${col};--tilt:${t}deg"
+    onclick="openDetail('${b.id}')">
+    ${bm}
+    <div class="spine-inner">
+      <div class="s-title">${esc(b.title)}</div>
+      <div class="s-author">${esc(b.author||'')}</div>
+      ${sr?`<div class="s-stars">${sr}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function buildRow(books){
+  return `<div class="shelf-row">
+    <div class="books-row">${books.map(buildSpine).join('')}</div>
+    <div class="shelf-plank"></div>
+  </div>`;
+}
+
+function buildShelf(){
+  const books=filtered();
+  const chip=S.yearFilter?`<div class="yr-chip" onclick="clearYear()">📅 ${S.yearFilter} &times;</div>`:'';
+  if(!books.length){
+    const hints={
+      finished:'Tap + to log a book you\'ve finished.',
+      reading:'Tap + to add your current read.',
+      wishlist:'Tap + to add a book to your wishlist.',
+      favorite:'Mark a book as favourite to see it here.',
+    };
+    return chip+`<div class="empty"><div class="ei">📚</div><p>Your ${SHELF_LABEL[S.tab]} shelf is empty.</p><p class="eh">${hints[S.tab]||''}</p></div>`;
+  }
+  const pr=perRow();
+  const cls=S.tab==='favorite'?'fav-bookcase':'';
+  let rows='';
+  for(let i=0;i<books.length;i+=pr) rows+=buildRow(books.slice(i,i+pr));
+  return chip+`<div class="${cls}">${rows}</div>`;
+}
+
+function buildStats(){
+  const st=calcStats();
+  const ach=achievements(st);
+  const bw=S.mangaMode?'Volumes':'Books';
+  return `
+    <div class="stats-ttl">Reading Stats</div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val">${st.total}</div><div class="stat-lbl">${bw} Read</div></div>
+      <div class="stat-card"><div class="stat-val">${st.pages.toLocaleString()}</div><div class="stat-lbl">Pages Read</div></div>
+      <div class="stat-card"><div class="stat-val">${st.avgR}</div><div class="stat-lbl">Avg Rating</div><div class="stat-sub">${stars(Math.round(parseFloat(st.avgR)))}</div></div>
+      <div class="stat-card"><div class="stat-val">${S.books.length}</div><div class="stat-lbl">Total in Library</div></div>
+      <div class="stat-card" style="grid-column:span 2"><div class="stat-lbl">Favourite Author</div><div class="stat-sub" style="font-size:16px;font-weight:700;color:var(--text);margin-top:6px">${esc(st.topA)}</div></div>
+      <div class="stat-card" style="grid-column:span 2"><div class="stat-lbl">Favourite Genre</div><div class="stat-sub" style="font-size:16px;font-weight:700;color:var(--text);margin-top:6px">${esc(st.topG)}</div></div>
+    </div>
+    <div class="stats-ttl">Achievements</div>
+    <div class="badges">${ach.map(a=>`<div class="badge${a.on?' on':''}">
+      <div class="b-icon">${a.icon}</div>
+      <div class="b-name">${a.name}</div>
+      <div class="b-desc">${a.desc}</div>
+    </div>`).join('')}</div>`;
+}
+
+function buildTimeline(){
+  const grouped=byYear();
+  if(!grouped.length) return `<div class="empty"><div class="ei">📅</div><p>No reading history yet.</p></div>`;
+  const max=Math.max(...grouped.map(([,b])=>b.length));
+  const bw=S.mangaMode?'vol':'book';
+  return `<div class="stats-ttl">Reading History — click a year to filter the shelf</div>
+    ${grouped.map(([y,books])=>{
+      const pct=max>0?Math.round(books.length/max*100):0;
+      const active=S.yearFilter==y;
+      return `<div class="yr-row${active?' active':''}" onclick="setYear(${y})">
+        <div class="yr-num">${y}</div>
+        <div class="yr-bar"><div class="yr-fill" style="width:${pct}%"></div></div>
+        <div class="yr-cnt">${books.length} ${bw}${books.length!==1?'s':''}</div>
+      </div>`;
+    }).join('')}`;
+}
+
+/* ─── RENDER ───────────────────────────────────────────────────────────────── */
+function render(){
+  document.body.classList.toggle('manga-mode', S.mangaMode);
+  let view='';
+  if(S.view==='shelf')    view=buildShelf();
+  else if(S.view==='stats')    view=buildStats();
+  else if(S.view==='timeline') view=buildTimeline();
+  document.getElementById('app').innerHTML=
+    buildHeader()+`<div class="content">${view}</div>`+buildTabs();
+}
+
+/* ─── DETAIL PANEL ─────────────────────────────────────────────────────────── */
+function openDetail(id){
+  const b=S.books.find(x=>x.id===id);
+  if(!b) return;
+  S.selId=id;
+  const manga=b.isManga||b.type==='manga';
+  const col=GENRE_COLOR[b.genre]||'#4b5563';
+  const gi=GENRE_ICON[b.genre]||'📚';
+
+  // Cover
+  const cov=document.getElementById('dp-cover');
+  cov.style.background=col;
+  cov.innerHTML=b.coverUrl
+    ?`<img src="${esc(b.coverUrl)}" alt="" onerror="this.style.display='none'">`
+    :gi;
+
+  document.getElementById('dp-title').textContent=b.title||'';
+  document.getElementById('dp-author').textContent=b.author||'';
+  document.getElementById('dp-stars').innerHTML=stars(b.rating||0);
+
+  const tags=[b.genre, SHELF_LABEL[b.status], manga?'Manga':'Book'].filter(Boolean);
+  document.getElementById('dp-tags').innerHTML=tags.map(t=>`<span class="det-tag">${esc(t)}</span>`).join('');
+
+  document.getElementById('dp-grid').innerHTML=`
+    <div class="info-cell"><div class="info-lbl">Pages</div><div class="info-val">${b.pages||'—'}</div></div>
+    <div class="info-cell"><div class="info-lbl">Est. Time</div><div class="info-val">${readTime(b.pages)}</div></div>
+    <div class="info-cell"><div class="info-lbl">Started</div><div class="info-val" style="font-size:11px">${fmtDate(b.dateStarted)}</div></div>
+    <div class="info-cell"><div class="info-lbl">Finished</div><div class="info-val" style="font-size:11px">${fmtDate(b.dateFinished)}</div></div>`;
+
+  const rw=document.getElementById('dp-review-wrap');
+  if(b.review){ rw.style.display=''; document.getElementById('dp-review').textContent=b.review; }
+  else rw.style.display='none';
+
+  const qw=document.getElementById('dp-quotes-wrap');
+  const qs=(b.quotes||[]).filter(q=>q.trim());
+  if(qs.length){
+    qw.style.display='';
+    document.getElementById('dp-quotes').innerHTML=qs.map(q=>`<div class="quote-card">"${esc(q)}"</div>`).join('');
+  } else qw.style.display='none';
+
+  document.getElementById('det-overlay').classList.add('on');
+  document.getElementById('det-panel').classList.add('on');
+  const sp=document.getElementById('sp-'+id);
+  if(sp) sp.classList.add('pulled');
+}
+
+function closeDetail(){
+  if(S.selId){
+    const sp=document.getElementById('sp-'+S.selId);
+    if(sp) sp.classList.remove('pulled');
+  }
+  document.getElementById('det-overlay').classList.remove('on');
+  document.getElementById('det-panel').classList.remove('on');
+  S.selId=null;
+}
+
+/* ─── MODAL ────────────────────────────────────────────────────────────────── */
+function openModal(){
+  S.editId=null; S.rating=0;
+  document.getElementById('modal-ttl').textContent='Add Book';
+  document.getElementById('submit-btn').textContent='Add Book';
+  clearForm();
+  document.getElementById('f-status').value=S.tab!=='all'?S.tab:'finished';
+  document.getElementById('f-type').value=S.mangaMode?'manga':'book';
+  document.getElementById('modal-wrap').classList.remove('off');
+}
+
+function openEditModal(id){
+  const b=S.books.find(x=>x.id===id);
+  if(!b) return;
+  S.editId=id; S.rating=b.rating||0;
+  document.getElementById('modal-ttl').textContent='Edit Book';
+  document.getElementById('submit-btn').textContent='Save Changes';
+  clearForm();
+  document.getElementById('f-title').value=b.title||'';
+  document.getElementById('f-author').value=b.author||'';
+  document.getElementById('f-pages').value=b.pages||'';
+  document.getElementById('f-genre').value=b.genre||'Fiction';
+  document.getElementById('f-status').value=b.status||'finished';
+  document.getElementById('f-type').value=(b.isManga||b.type==='manga')?'manga':'book';
+  document.getElementById('f-start').value=b.dateStarted||'';
+  document.getElementById('f-end').value=b.dateFinished||'';
+  document.getElementById('f-review').value=b.review||'';
+  document.getElementById('f-quotes').value=(b.quotes||[]).join('\n');
+  document.getElementById('f-cover').value=b.coverUrl||'';
+  setRating(b.rating||0);
+  document.getElementById('modal-wrap').classList.remove('off');
+}
+
+function clearForm(){
+  ['f-title','f-author','f-pages','f-review','f-quotes','f-cover'].forEach(id=>{
+    document.getElementById(id).value='';
+  });
+  document.getElementById('f-start').value='';
+  document.getElementById('f-end').value='';
+  document.getElementById('f-genre').value='Fantasy';
+  setRating(0);
+}
+
+function closeModal(){
+  document.getElementById('modal-wrap').classList.add('off');
+  S.editId=null; S.rating=0;
+}
+
+function overlayClose(e){
+  if(e.target===document.getElementById('modal-wrap')) closeModal();
+}
+
+function setRating(v){
+  S.rating=v;
+  document.querySelectorAll('.star').forEach(s=>{
+    s.classList.toggle('lit', parseInt(s.dataset.v)<=v);
+  });
+}
+
+function submitBook(){
+  const title=document.getElementById('f-title').value.trim();
+  if(!title){ alert('Please enter a title.'); return; }
+  const quotes=document.getElementById('f-quotes').value.split('\n').map(q=>q.trim()).filter(Boolean);
+  const data={
+    title,
+    author:       document.getElementById('f-author').value.trim(),
+    genre:        document.getElementById('f-genre').value,
+    pages:        parseInt(document.getElementById('f-pages').value)||0,
+    status:       document.getElementById('f-status').value,
+    isManga:      document.getElementById('f-type').value==='manga',
+    rating:       S.rating,
+    dateStarted:  document.getElementById('f-start').value||'',
+    dateFinished: document.getElementById('f-end').value||'',
+    review:       document.getElementById('f-review').value.trim(),
+    quotes,
+    coverUrl:     document.getElementById('f-cover').value.trim(),
+    coverColor:   GENRE_COLOR[document.getElementById('f-genre').value]||'#4b5563',
+  };
+  if(S.editId){
+    const i=S.books.findIndex(b=>b.id===S.editId);
+    if(i!==-1) S.books[i]={...S.books[i],...data};
+  } else {
+    S.books.push({id:uid(),...data});
+  }
+  save(); closeModal(); render();
+}
+
+/* ─── DELETE ───────────────────────────────────────────────────────────────── */
+function askDelete(){
+  if(!S.selId) return;
+  S.pendingDel=S.selId;
+  document.getElementById('confirm-wrap').classList.remove('off');
+}
+function closeConfirm(){
+  document.getElementById('confirm-wrap').classList.add('off');
+  S.pendingDel=null;
+}
+function doDelete(){
+  if(!S.pendingDel) return;
+  S.books=S.books.filter(b=>b.id!==S.pendingDel);
+  S.pendingDel=null;
+  closeConfirm();
+  closeDetail();
+  save(); render();
+}
+
+/* ─── EDIT FROM PANEL ──────────────────────────────────────────────────────── */
+function startEdit(){
+  const id=S.selId;
+  closeDetail();
+  openEditModal(id);
+}
+
+/* ─── NAV HELPERS ──────────────────────────────────────────────────────────── */
+function setTab(t){ S.tab=t; S.yearFilter=null; S.view='shelf'; closeDetail(); render(); }
+function setView(v){ S.view=v; closeDetail(); render(); }
+function setSort(s){ S.sortBy=s; save(); render(); }
+function setYear(y){ S.yearFilter=(S.yearFilter==y?null:y); S.view='shelf'; render(); }
+function clearYear(){ S.yearFilter=null; render(); }
+function toggleManga(){ S.mangaMode=!S.mangaMode; save(); render(); }
+
+/* ─── RESIZE ───────────────────────────────────────────────────────────────── */
+let _rt; window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(render,160); });
+
+/* ─── INIT ─────────────────────────────────────────────────────────────────── */
+load(); render();
+</script>
+</body>
+</html>
