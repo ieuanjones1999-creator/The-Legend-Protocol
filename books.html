@@ -27,18 +27,29 @@
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 ::-webkit-scrollbar { width: 0; height: 0; }
 body {
-  background: var(--bg);
+  background: #16100a;
   color: var(--text);
   font-family: Georgia, 'Times New Roman', serif;
   min-height: 100vh;
   overflow-x: hidden;
 }
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    repeating-linear-gradient(91deg,
+      transparent 0px, transparent 58px,
+      rgba(0,0,0,0.06) 58px, rgba(0,0,0,0.06) 60px
+    ),
+    radial-gradient(ellipse 90% 55% at 50% 0%, rgba(130,60,8,0.38) 0%, transparent 70%),
+    linear-gradient(180deg, #1e1208 0%, #160e06 50%, #100a04 100%);
+}
 
 /* ─── HEADER ─────────────────────────────────────────────────────────────── */
 .hdr {
   position: sticky; top: 0; z-index: 100;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #1e1208 0%, #160e06 100%);
+  border-bottom: 1px solid rgba(150,90,30,0.3);
+  box-shadow: 0 2px 14px rgba(0,0,0,0.5);
   padding: 11px 14px;
   display: flex; align-items: center; gap: 8px;
 }
@@ -69,7 +80,9 @@ body {
 /* ─── SHELF TABS ─────────────────────────────────────────────────────────── */
 .shelf-tabs {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-  background: var(--bg2); border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, #160e06 0%, #1e1208 100%);
+  border-top: 1px solid rgba(150,90,30,0.22);
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.5);
   display: flex; overflow-x: auto; scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -98,27 +111,36 @@ body {
 .empty .eh { font-size: 12px; margin-top: 8px; opacity: 0.65; }
 
 /* ─── BOOKCASE ───────────────────────────────────────────────────────────── */
-.shelf-row { margin-bottom: 0; }
+.shelf-row { margin-bottom: 12px; }
 .books-row {
   display: flex; align-items: flex-end; gap: 3px;
   padding: 14px 10px 0; min-height: 210px;
-  background: rgba(0,0,0,0.22);
+  background: linear-gradient(180deg, #1c1006 0%, #140c04 100%);
+  border-left: 3px solid #3a2210; border-right: 3px solid #3a2210;
 }
 .manga-mode .books-row { min-height: 268px; direction: rtl; }
 .shelf-plank {
-  height: 18px;
-  background: linear-gradient(180deg, #9a6f42 0%, #7a5230 22%, #6b4826 60%, #4a2e10 100%);
-  box-shadow: 0 5px 16px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.13);
-  border-radius: 0 0 1px 1px; position: relative; overflow: hidden;
+  height: 24px;
+  background: linear-gradient(180deg,
+    #d4924e 0%,
+    #aa6f32 12%,
+    #8a5424 40%,
+    #6b3f16 70%,
+    #4e2e0c 100%
+  );
+  box-shadow: 0 6px 22px rgba(0,0,0,0.88),
+              inset 0 2px 0 rgba(255,190,100,0.28),
+              inset 0 -1px 0 rgba(0,0,0,0.5);
+  border-radius: 0 0 2px 2px; position: relative; overflow: hidden;
 }
 .shelf-plank::after {
   content: '';
   position: absolute; top: 0; left: 0; right: 0; height: 3px;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.07) 40%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255,210,140,0.18) 40%, transparent 100%);
 }
 .fav-bookcase .shelf-plank {
-  background: linear-gradient(180deg, #c8960a 0%, #a07420 22%, #8b6310 60%, #6b4a08 100%);
-  box-shadow: 0 5px 16px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,200,0,0.22), 0 0 14px rgba(160,120,0,0.14);
+  background: linear-gradient(180deg, #e8b84a 0%, #c09020 12%, #9a7010 40%, #7a5208 70%, #5a3a04 100%);
+  box-shadow: 0 6px 22px rgba(0,0,0,0.88), inset 0 2px 0 rgba(255,220,80,0.35), 0 0 16px rgba(180,130,0,0.18);
 }
 
 /* ─── BOOK SPINE ─────────────────────────────────────────────────────────── */
@@ -131,11 +153,33 @@ body {
   transform-origin: bottom center;
   transform: rotate(var(--tilt, 0deg));
   box-shadow: 2px 0 10px rgba(0,0,0,0.55), inset -3px 0 8px rgba(0,0,0,0.3);
+  /* 3D depth gradient over the genre colour */
+  background:
+    linear-gradient(to right,
+      rgba(0,0,0,0.52) 0%,
+      rgba(255,255,255,0.07) 7%,
+      transparent 22%,
+      transparent 72%,
+      rgba(0,0,0,0.48) 100%
+    ),
+    var(--spine-bg, #4b5563);
+}
+/* Cover-image spines get the same 3D overlay via ::before */
+.spine.has-cover::before {
+  content: '';
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(to right,
+    rgba(0,0,0,0.52) 0%,
+    rgba(255,255,255,0.06) 7%,
+    transparent 22%,
+    transparent 72%,
+    rgba(0,0,0,0.48) 100%
+  );
 }
 .spine::after {
   content: '';
-  position: absolute; top: 0; left: 0; bottom: 0; width: 38%;
-  background: linear-gradient(90deg, rgba(255,255,255,0.09) 0%, transparent 100%);
+  position: absolute; top: 0; right: 0; bottom: 0; width: 2px;
+  background: rgba(0,0,0,0.35);
   pointer-events: none;
 }
 .spine:hover {
@@ -710,8 +754,12 @@ function buildSpine(b){
   const t=tilt(b.id);
   const bm=b.status==='reading'?'<div class="bookmark"></div>':'';
   const sr=b.rating?'★'.repeat(b.rating):'';
-  return `<div class="spine" id="sp-${b.id}" data-id="${b.id}"
-    style="width:${w}px;height:${h}px;background:${col};--tilt:${t}deg"
+  const hasCover=b.coverUrl?true:false;
+  const bgAttr=hasCover
+    ?`style="width:${w}px;height:${h}px;background:url('${esc(b.coverUrl)}') center/cover no-repeat;--tilt:${t}deg"`
+    :`style="width:${w}px;height:${h}px;--spine-bg:${col};--tilt:${t}deg"`;
+  return `<div class="spine${hasCover?' has-cover':''}" id="sp-${b.id}" data-id="${b.id}"
+    ${bgAttr}
     onclick="openDetail('${b.id}')">
     ${bm}
     <div class="spine-inner">
