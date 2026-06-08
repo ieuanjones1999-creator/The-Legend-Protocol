@@ -267,7 +267,8 @@ const NAV=[
   {id:"Todo",icon:"✅"},{id:"Calendar",icon:"📅"},{id:"Gaming",icon:"🎮"},
   {id:"Anime",icon:"🎌"},{id:"Movies",icon:"🎬"},{id:"Susan & Onion",icon:"📖"},
   {id:"Macros",icon:"🥩"},{id:"Challenges",icon:"🗡️"},{id:"Habits",icon:"🔥"},{id:"Chat",icon:"💬"},
-  {id:"Rating",icon:"⭐"},{id:"Quests",icon:"📋"},{id:"Focus",icon:"⏱"}
+  {id:"Rating",icon:"⭐"},{id:"Quests",icon:"📋"},{id:"Focus",icon:"⏱"},
+  {id:"SplitManager",icon:"⚙️"},{id:"SplitEditor",icon:"📋"}
 ];
 
 const BOTTOM_NAV=[
@@ -338,7 +339,8 @@ let state={
     notifSettings:{workout:"",creatine:"",waterReminder:false},
     orm:{},measurements:[],weeklyReview:null,lastWeeklyReviewDate:null,
     preSessBriefs:{},sessionNotes:{},injuries:[],customTemplates:[],bossNotifCycle:{minor:0,major:0,raid:0},bossActiveFights:{minor:null,major:null,raid:null},
-    habits:[],habitLogs:{},extraExercises:{},unitPref:"kg",hardMode:false,protocolStartDate:null,day1Stats:null
+    habits:[],habitLogs:{},extraExercises:{},unitPref:"kg",hardMode:false,protocolStartDate:null,day1Stats:null,
+    activeSplitId:"default",customSplits:[],dayLabels:{}
   },
   chat:{msgs:[{role:"assistant",text:"Gunther online. Legend Protocol V2.0 loaded. Ready when you are."}],input:"",loading:false},
   workout:{showTargets:true,showHistory:false,showSuperset:false,editingExercise:null,sessionFlowMode:false,sessionFlowExIdx:0,showTemplates:false,showAddExercise:false,showPlateCalc:false},
@@ -650,10 +652,208 @@ function updateStreak(){
 }
 
 
+// ── SPLIT HELPERS ────────────────────────────────────────────────
+function getActiveSplit(d){
+  if(!d||!d.activeSplitId||d.activeSplitId==="default"){
+    return SPLIT.map(s=>({...s,label:(d&&d.dayLabels&&d.dayLabels[s.day])||s.label}));
+  }
+  const custom=(d.customSplits||[]).find(s=>s.id===d.activeSplitId);
+  return custom?custom.days:SPLIT.map(s=>({...s,label:(d&&d.dayLabels&&d.dayLabels[s.day])||s.label}));
+}
+function switchSplit(id){
+  state.data.activeSplitId=id;
+  state.currentDay=1;
+  saveData();render();
+}
+function createSplit(name,fromDefault){
+  const id='sp_'+Date.now().toString(36);
+  const days=fromDefault
+    ?SPLIT.map((s,i)=>({...s}))
+    :[{day:1,label:"Day 1",type:"workout",exercises:[{name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:""}]}];
+  state.data.customSplits=state.data.customSplits||[];
+  state.data.customSplits.push({id,name,createdAt:new Date().toLocaleDateString("en-GB"),days});
+  saveData();
+  state._editSplitId=id;
+  setTab("SplitEditor");
+}
+function deleteSplit(id){
+  if(state.data.activeSplitId===id)return showToast("Cannot delete active split");
+  if(!confirm("Delete this split?"))return;
+  state.data.customSplits=(state.data.customSplits||[]).filter(s=>s.id!==id);
+  saveData();render();
+}
+function addSplitDay(splitId){
+  const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
+  if(!split||split.days.length>=8)return;
+  const n=split.days.length+1;
+  split.days.push({day:n,label:"Day "+n,type:"workout",exercises:[{name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:""}]});
+  saveData();render();
+}
+function removeSplitDay(splitId,dayNum){
+  const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
+  if(!split||split.days.length<=2)return showToast("Minimum 2 days");
+  if(!confirm("Remove this day?"))return;
+  split.days=split.days.filter(d=>d.day!==dayNum).map((d,i)=>({...d,day:i+1}));
+  saveData();render();
+}
+function setSplitDayType(splitId,dayNum,type){
+  const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
+  if(!split)return;
+  const day=split.days.find(d=>d.day===dayNum);
+  if(day){day.type=type;if(type==="rest"&&!day.tasks)day.tasks=[];}
+  saveData();render();
+}
+function addSplitExercise(splitId,dayNum){
+  const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
+  if(!split)return;
+  const day=split.days.find(d=>d.day===dayNum);
+  if(day){if(!day.exercises)day.exercises=[];day.exercises.push({name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:""});}
+  saveData();render();
+}
+function removeSplitExercise(splitId,dayNum,exIdx){
+  const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
+  if(!split)return;
+  const day=split.days.find(d=>d.day===dayNum);
+  if(day&&day.exercises)day.exercises.splice(exIdx,1);
+  saveData();render();
+}
+function updateSplitExercise(splitId,dayNum,exIdx,field,val){
+  const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
+  if(!split)return;
+  const day=split.days.find(d=>d.day===dayNum);
+  if(day&&day.exercises&&day.exercises[exIdx])day.exercises[exIdx][field]=val;
+  saveData();
+}
+function updateSplitDayLabel(splitId,dayNum,val){
+  const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
+  if(!split)return;
+  const day=split.days.find(d=>d.day===dayNum);
+  if(day)day.label=val;
+  saveData();
+}
+function updateSplitName(splitId,val){
+  const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
+  if(split)split.name=val;
+  saveData();
+}
+function startRenameDay(dayNum,el){
+  const current=el.querySelector("span")?.textContent||"";
+  el.innerHTML='<input id="renameDayInp" value="'+current.replace(/"/g,"&quot;")+'" style="background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:4px 10px;border-radius:6px;font-size:12px;letter-spacing:2px;font-weight:700;width:160px" onclick="event.stopPropagation()" onkeydown="if(event.key===\'Enter\')saveDayRename('+dayNum+')">'+
+    '<button onclick="event.stopPropagation();saveDayRename('+dayNum+')" style="background:rgba(74,222,128,0.15);border:1px solid #4ade80;color:#4ade80;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:6px">SAVE</button>'+
+    '<button onclick="event.stopPropagation();render()" style="background:none;border:1px solid var(--card-b);color:var(--mut);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;margin-left:4px">✕</button>';
+  el.querySelector("#renameDayInp")?.focus();
+}
+function saveDayRename(dayNum){
+  const val=document.getElementById("renameDayInp")?.value?.trim();
+  if(!val)return render();
+  if(!state.data.activeSplitId||state.data.activeSplitId==="default"){
+    if(!state.data.dayLabels)state.data.dayLabels={};
+    state.data.dayLabels[dayNum]=val;
+  } else {
+    const split=(state.data.customSplits||[]).find(s=>s.id===state.data.activeSplitId);
+    if(split){const day=split.days.find(d2=>d2.day===dayNum);if(day)day.label=val;}
+  }
+  saveData();render();
+}
+function buildSplitManager(d){
+  const splits=d.customSplits||[];
+  const active=d.activeSplitId||"default";
+  return'<div style="padding:16px">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">'+
+      '<div style="font-size:10px;letter-spacing:4px;color:#4ade80;font-weight:700">TRAINING SPLITS</div>'+
+      '<button onclick="setTab(\'Workout\')" style="font-size:10px;letter-spacing:1px;padding:5px 12px;border-radius:7px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#4ade80;cursor:pointer">← BACK</button>'+
+    '</div>'+
+    '<div style="font-size:9px;letter-spacing:3px;color:var(--mut);margin-bottom:10px">PRESETS</div>'+
+    '<div style="background:var(--card);border:1px solid '+(active==="default"?"rgba(74,222,128,0.5)":"var(--card-b)")+';border-radius:14px;padding:16px;margin-bottom:16px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
+        '<div>'+
+          '<div style="font-size:14px;font-weight:700;color:'+(active==="default"?"#4ade80":"var(--fg)")+'">CBum Hypertrophy</div>'+
+          '<div style="font-size:10px;color:var(--mut);margin-top:3px">8-day · Chest / Back / Legs / Arms</div>'+
+          (active==="default"?'<div style="font-size:9px;letter-spacing:2px;color:#4ade80;margin-top:6px;font-weight:700">✓ ACTIVE</div>':"")+
+        '</div>'+
+        (active!=="default"?'<button onclick="switchSplit(\'default\')" style="font-size:9px;letter-spacing:1px;padding:6px 12px;border-radius:8px;background:rgba(74,222,128,0.1);border:1px solid #4ade80;color:#4ade80;cursor:pointer;font-weight:700">USE THIS</button>':"<div></div>")+
+      '</div>'+
+    '</div>'+
+    (splits.length?'<div style="font-size:9px;letter-spacing:3px;color:var(--mut);margin-bottom:10px">YOUR SPLITS</div>'+
+    splits.map(s=>{
+      const isActive=active===s.id;
+      return'<div style="background:var(--card);border:1px solid '+(isActive?"rgba(74,222,128,0.5)":"var(--card-b)")+';border-radius:14px;padding:16px;margin-bottom:10px">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start">'+
+          '<div style="flex:1">'+
+            '<div style="font-size:14px;font-weight:700;color:'+(isActive?"#4ade80":"var(--fg)")+'">'+s.name+'</div>'+
+            '<div style="font-size:10px;color:var(--mut);margin-top:3px">'+s.days.length+'-day · Created '+s.createdAt+'</div>'+
+            (isActive?'<div style="font-size:9px;letter-spacing:2px;color:#4ade80;margin-top:6px;font-weight:700">✓ ACTIVE</div>':"")+
+          '</div>'+
+          '<div style="display:flex;gap:6px;flex-shrink:0">'+
+            (!isActive?'<button onclick="switchSplit(\''+s.id+'\')" style="font-size:9px;letter-spacing:1px;padding:6px 10px;border-radius:8px;background:rgba(74,222,128,0.1);border:1px solid #4ade80;color:#4ade80;cursor:pointer;font-weight:700">USE</button>':"")+
+            '<button onclick="state._editSplitId=\''+s.id+'\';setTab(\'SplitEditor\')" style="font-size:9px;letter-spacing:1px;padding:6px 10px;border-radius:8px;background:rgba(74,222,128,0.06);border:1px solid var(--card-b);color:var(--fg2);cursor:pointer">EDIT</button>'+
+            '<button onclick="deleteSplit(\''+s.id+'\')" style="font-size:9px;padding:6px 10px;border-radius:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:#ef4444;cursor:pointer">✕</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    }).join(""):"<div></div>")+
+    '<div style="font-size:9px;letter-spacing:3px;color:var(--mut);margin:16px 0 10px">CREATE NEW</div>'+
+    '<div class="card">'+
+      '<input id="newSplitName" placeholder="Split name (e.g. My PPL)" style="background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:9px 13px;border-radius:7px;font-size:13px;width:100%;box-sizing:border-box;margin-bottom:10px">'+
+      '<div style="display:flex;gap:8px">'+
+        '<button onclick="const n=document.getElementById(\'newSplitName\').value.trim();if(n)createSplit(n,false);else showToast(\'Enter a name first\')" style="flex:1;padding:10px;border-radius:8px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#4ade80;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px">START BLANK</button>'+
+        '<button onclick="const n=document.getElementById(\'newSplitName\').value.trim();if(n)createSplit(n,true);else showToast(\'Enter a name first\')" style="flex:1;padding:10px;border-radius:8px;background:rgba(74,222,128,0.06);border:1px solid var(--card-b);color:var(--fg2);cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px">COPY CBUM</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+function buildSplitEditor(d){
+  const splitId=state._editSplitId;
+  const split=(d.customSplits||[]).find(s=>s.id===splitId);
+  if(!split)return'<div style="padding:16px;color:var(--mut)">Split not found. <button onclick="setTab(\'SplitManager\')" style="background:none;border:none;color:#4ade80;cursor:pointer">← Back</button></div>';
+  let html='<div style="padding:16px">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'+
+      '<button onclick="setTab(\'SplitManager\')" style="font-size:10px;letter-spacing:1px;padding:5px 12px;border-radius:7px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#4ade80;cursor:pointer">← SPLITS</button>'+
+      '<div style="font-size:10px;letter-spacing:3px;color:#4ade80;font-weight:700">EDIT SPLIT</div>'+
+    '</div>'+
+    '<input value="'+split.name.replace(/"/g,"&quot;")+'" placeholder="Split name" onchange="updateSplitName(\''+splitId+'\',this.value)" oninput="updateSplitName(\''+splitId+'\',this.value)" style="background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:9px 13px;border-radius:7px;font-size:14px;font-weight:700;width:100%;box-sizing:border-box;margin-bottom:16px">';
+  split.days.forEach(day=>{
+    const isRest=day.type==="rest";
+    html+='<div style="background:var(--card);border:1px solid var(--card-b);border-radius:14px;padding:16px;margin-bottom:12px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">'+
+        '<div style="font-size:9px;letter-spacing:2px;color:var(--mut);flex-shrink:0">DAY '+day.day+'</div>'+
+        '<input value="'+day.label.replace(/"/g,"&quot;")+'" placeholder="Day name" onchange="updateSplitDayLabel(\''+splitId+'\','+day.day+',this.value)" style="flex:1;min-width:100px;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:6px 10px;border-radius:6px;font-size:12px;font-weight:700">'+
+        '<button onclick="setSplitDayType(\''+splitId+'\','+day.day+',\'workout\')" style="font-size:9px;padding:5px 9px;border-radius:6px;cursor:pointer;font-weight:700;'+(isRest?"background:transparent;border:1px solid var(--card-b);color:var(--mut)":"background:rgba(74,222,128,0.15);border:1px solid #4ade80;color:#4ade80")+'">WORKOUT</button>'+
+        '<button onclick="setSplitDayType(\''+splitId+'\','+day.day+',\'rest\')" style="font-size:9px;padding:5px 9px;border-radius:6px;cursor:pointer;font-weight:700;'+(isRest?"background:rgba(74,222,128,0.15);border:1px solid #4ade80;color:#4ade80":"background:transparent;border:1px solid var(--card-b);color:var(--mut)")+'">REST</button>'+
+        (split.days.length>2?'<button onclick="removeSplitDay(\''+splitId+'\','+day.day+')" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer">✕</button>':"")+
+      '</div>';
+    if(!isRest){
+      html+='<div style="font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:8px">EXERCISES</div>';
+      (day.exercises||[]).forEach((ex,ei)=>{
+        html+='<div style="background:rgba(74,222,128,0.04);border:1px solid var(--card-b);border-radius:10px;padding:10px;margin-bottom:8px">'+
+          '<div style="display:flex;gap:6px;margin-bottom:6px">'+
+            '<input value="'+ex.name.replace(/"/g,"&quot;")+'" placeholder="Exercise name" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'name\',this.value)" style="flex:1;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:12px">'+
+            '<button onclick="removeSplitExercise(\''+splitId+'\','+day.day+','+ei+')" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer">✕</button>'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">'+
+            '<div><div style="font-size:8px;color:var(--mut);margin-bottom:2px">SETS</div><input value="'+ex.sets+'" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'sets\',this.value)" style="width:100%;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:12px;box-sizing:border-box"></div>'+
+            '<div><div style="font-size:8px;color:var(--mut);margin-bottom:2px">REPS</div><input value="'+ex.reps+'" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'reps\',this.value)" style="width:100%;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:12px;box-sizing:border-box"></div>'+
+            '<div><div style="font-size:8px;color:var(--mut);margin-bottom:2px">REST</div><input value="'+(ex.rest||"")+'" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'rest\',this.value)" style="width:100%;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:12px;box-sizing:border-box"></div>'+
+          '</div>'+
+          '<input value="'+(ex.notes||"")+'" placeholder="Notes (optional)" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'notes\',this.value)" style="width:100%;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:11px;box-sizing:border-box">'+
+        '</div>';
+      });
+      html+='<button onclick="addSplitExercise(\''+splitId+'\','+day.day+')" style="width:100%;padding:8px;border-radius:8px;background:rgba(74,222,128,0.06);border:1px dashed rgba(74,222,128,0.3);color:#4ade80;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px;margin-top:2px">+ ADD EXERCISE</button>';
+    }
+    html+='</div>';
+  });
+  if(split.days.length<8){
+    html+='<button onclick="addSplitDay(\''+splitId+'\')" style="width:100%;padding:12px;border-radius:10px;background:rgba(74,222,128,0.08);border:1px dashed rgba(74,222,128,0.4);color:#4ade80;cursor:pointer;font-size:12px;font-weight:700;letter-spacing:2px;margin-bottom:80px">+ ADD DAY</button>';
+  }
+  html+='</div>';
+  return html;
+}
+
 // ── BUILD FUNCTIONS ───────────────────────────────────────────────
 function buildApp(){
   const d=state.data,tab=state.tab;
-  const workout=SPLIT[(state.currentDay-1)%8];
+  const split=getActiveSplit(d);
+  const workout=split[(state.currentDay-1)%split.length];
   const lv=getLevel(d.xp||0);
   const drawerItems=NAV.map(n=>'<button onclick="setTab(\''+n.id+'\')" style="display:flex;align-items:center;gap:14px;width:100%;padding:14px 20px;background:'+(tab===n.id?"rgba(74,222,128,0.12)":"none")+';border:none;border-left:3px solid '+(tab===n.id?"#4ade80":"transparent")+';color:'+(tab===n.id?"#4ade80":"var(--fg)")+';cursor:pointer;font-size:13px;letter-spacing:1px;font-family:Georgia,serif"><span style="font-size:18px">'+n.icon+'</span>'+n.id.toUpperCase()+'</button>').join("");
   return'<div style="position:fixed;inset:0;z-index:0;background-image:url(\''+BG+'\');background-size:cover;background-position:center top;opacity:0.18;filter:grayscale(20%)"></div>'+
@@ -693,6 +893,8 @@ function buildTab(tab,workout,d){
     case"Rating":return buildRating(d);
     case"Quests":return buildQuests(d);
     case"Focus":return buildFocus(d);
+    case"SplitManager":return buildSplitManager(d);
+    case"SplitEditor":return buildSplitEditor(d);
     default:return"";
   }
 }
@@ -840,7 +1042,7 @@ function buildHome(workout,d){
     '<div style="font-size:26px;font-weight:700;color:#4ade80;text-shadow:0 0 30px rgba(74,222,128,0.4)">'+(isRest?"REST DAY":"DAY "+workout?.day)+'</div>'+
     '<div style="font-size:13px;color:var(--fg2);margin-top:2px;margin-bottom:12px">'+(workout?.label||"")+'</div>'+
     '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
-      SPLIT.map(d2=>'<button onclick="setDay('+d2.day+')" style="padding:5px 10px;border-radius:6px;cursor:pointer;font-size:10px;letter-spacing:1px;font-weight:700;border:1px solid '+(state.currentDay===d2.day?"#4ade80":"rgba(74,222,128,0.2)")+';background:'+(state.currentDay===d2.day?"rgba(74,222,128,0.2)":"rgba(10,12,10,0.6)")+';color:'+(state.currentDay===d2.day?"#4ade80":d2.type==="rest"?"var(--mut)":"var(--mut)")+'">'+  (d2.type==="rest"?"REST":"D"+d2.day)+'</button>').join("")+
+      getActiveSplit(d).map(d2=>'<button onclick="setDay('+d2.day+')" style="padding:5px 10px;border-radius:6px;cursor:pointer;font-size:10px;letter-spacing:1px;font-weight:700;border:1px solid '+(state.currentDay===d2.day?"#4ade80":"rgba(74,222,128,0.2)")+';background:'+(state.currentDay===d2.day?"rgba(74,222,128,0.2)":"rgba(10,12,10,0.6)")+';color:'+(state.currentDay===d2.day?"#4ade80":d2.type==="rest"?"var(--mut)":"var(--mut)")+'">'+  (d2.type==="rest"?"REST":"D"+d2.day)+'</button>').join("")+
     '</div>'+
   '</div>'+
   // Stats row — progress rings
@@ -939,11 +1141,15 @@ function buildWorkout(workout,d){
 
   let html='<div style="padding:16px">'+
     '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px">'+
-      SPLIT.map(d2=>'<button onclick="setDay('+d2.day+')" style="flex:0 0 auto;padding:7px 12px;border-radius:7px;cursor:pointer;background:'+(state.currentDay===d2.day?"rgba(74,222,128,0.2)":"rgba(10,12,10,0.8)")+';border:1px solid '+(state.currentDay===d2.day?"#4ade80":"rgba(74,222,128,0.2)")+';color:'+(state.currentDay===d2.day?"#4ade80":"var(--mut)")+';font-size:10px;letter-spacing:1px;font-weight:700">'+(d2.type==="rest"?"REST":"DAY "+d2.day)+'</button>').join("")+
+      getActiveSplit(d).map(d2=>'<button onclick="setDay('+d2.day+')" style="flex:0 0 auto;padding:7px 12px;border-radius:7px;cursor:pointer;background:'+(state.currentDay===d2.day?"rgba(74,222,128,0.2)":"rgba(10,12,10,0.8)")+';border:1px solid '+(state.currentDay===d2.day?"#4ade80":"rgba(74,222,128,0.2)")+';color:'+(state.currentDay===d2.day?"#4ade80":"var(--mut)")+';font-size:10px;letter-spacing:1px;font-weight:700">'+(d2.type==="rest"?"REST":"DAY "+d2.day)+'</button>').join("")+
+    '</div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 10px;border-bottom:1px solid var(--card-b);margin-bottom:12px">'+
+      '<div style="font-size:9px;letter-spacing:2px;color:var(--mut)">'+(d.activeSplitId==="default"||!d.activeSplitId?"CBUM HYPERTROPHY":((d.customSplits||[]).find(s=>s.id===d.activeSplitId)?.name||"CUSTOM SPLIT").toUpperCase())+'</div>'+
+      '<button onclick="setTab(\'SplitManager\')" style="font-size:9px;letter-spacing:1px;padding:4px 10px;border-radius:6px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#4ade80;cursor:pointer;font-weight:700">⚙ CHANGE SPLIT</button>'+
     '</div>'+
     (deload?'<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;margin-bottom:12px"><div style="font-size:12px;color:#ef4444;margin-bottom:8px">⚠️ Deload recommended — '+getStalledExercises(d).length+' exercises stalling</div><button onclick="generateDeloadPlan()" class="btn" style="font-size:10px;padding:5px 12px;background:rgba(239,68,68,0.15);border-color:#ef4444;color:#ef4444">🤖 GET PLAN</button>'+(d.deloadPlan?'<div style="margin-top:10px;font-size:11px;color:var(--fg2);line-height:1.6;white-space:pre-wrap;border-top:1px solid rgba(239,68,68,0.2);padding-top:8px">'+d.deloadPlan+'</div>':"")+
     '</div>':"")+
-    '<div class="card"><div class="sec-title">'+(workout?.label||"")+'</div>';
+    '<div class="card"><div class="sec-title" style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="startRenameDay('+state.currentDay+',this)"><span>'+(workout?.label||"")+'</span><span style="font-size:11px;color:var(--mut)">✏️</span></div>';
 
   if(isRest){
     html+='<div style="font-size:12px;color:var(--fg2);margin-bottom:16px">Recovery day. Hit your targets below.</div>';
