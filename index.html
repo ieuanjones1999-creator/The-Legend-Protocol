@@ -1134,18 +1134,36 @@ function buildHome(workout,d){
   // Collapsible lower sections
   homeCard("heatmap","TRAINING HEATMAP — 365 DAYS",buildHeatmap(d),false)+
   homeCard("load","WEEKLY TRAINING LOAD",(()=>{const pts=calcWeeklyLoad(d);if(pts.length<2)return'<div style="font-size:11px;color:var(--mut);text-align:center;padding:8px">Log more sessions to see trend</div>';const latest=pts[pts.length-1];const prev=pts[pts.length-2];const diff=latest.y-prev.y;return'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:22px;font-weight:700;color:#4ade80">'+latest.y.toLocaleString()+'</div><div style="font-size:10px;color:'+(diff>0?"#ef4444":diff<0?"#4ade80":"var(--mut)")+'">'+(diff>0?"+":"")+diff.toLocaleString()+' vs last wk</div></div>'+buildSvgLineChart(pts,"#f97316");})(),false)+
-  homeCard("brief","GUNTHER\'S BRIEFING",(d.dailyBriefing?'<div style="font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap;margin-bottom:10px">'+d.dailyBriefing+'</div><button onclick="generateDailyBriefing()" style="font-size:10px;padding:4px 10px;border-radius:5px;cursor:pointer;border:1px solid rgba(74,222,128,0.3);background:transparent;color:#4ade80">↻ Refresh</button>':'<div style="font-size:11px;color:var(--mut);margin-bottom:10px">Auto-generated daily summary</div><button onclick="generateDailyBriefing()" class="btn" style="font-size:11px;padding:8px 14px">BRIEF ME</button>'),true)+
-  homeCard("review","WEEKLY REVIEW",'<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button onclick="generateWeeklyReview()" style="font-size:10px;padding:4px 10px;border-radius:5px;cursor:pointer;border:1px solid rgba(74,222,128,0.3);background:transparent;color:#4ade80">'+(d.weeklyReview?"↻ Refresh":"Generate")+'</button></div>'+(d.weeklyReview?'<div style="font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap">'+d.weeklyReview+'</div><div style="font-size:10px;color:var(--mut);margin-top:6px">'+( d.lastWeeklyReviewDate||"")+'</div>':'<div style="font-size:11px;color:var(--mut)">Get Gunther\'s take on your training week.</div>'),false)+
+  homeCard("targets","TODAY\'S TARGETS",(()=>{
+    const split=getActiveSplit(d),wo=split[(state.currentDay-1)%split.length];
+    if(!wo||wo.type==="rest")return'<div style="font-size:12px;color:var(--fg2)">Rest day — sleep, hydrate, recover 💤</div>';
+    const exes=(wo.exercises||[]).slice(0,6);
+    if(!exes.length)return'<div style="font-size:11px;color:var(--mut)">No exercises listed.</div>';
+    return exes.map((ex,i)=>{
+      const ov=d.exerciseOverrides?.[state.currentDay+"-"+i];const fe=ov?{...ex,...ov}:ex;
+      const t=getTarget(state.currentDay+"-"+fe.name,d);
+      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;'+(i>0?"border-top:1px solid var(--card-b)":"")+'"><span style="font-size:12px;color:var(--fg2);flex:1">'+fe.name+'</span><span style="font-size:12px;font-weight:700;color:'+(t.stalled?"#f97316":"#4ade80")+';text-align:right">'+t.advice+'</span></div>';
+    }).join("");
+  })(),true)+
+  homeCard("thisweek","THIS WEEK",(()=>{
+    const now=new Date(),dow=now.getDay(),mon=new Date(now);
+    mon.setDate(now.getDate()-(dow===0?6:dow-1));mon.setHours(0,0,0,0);
+    const ws=mon.toISOString().split("T")[0],td=now.toISOString().split("T")[0];
+    const wkSess=Object.keys(d.workoutLogs||{}).filter(k=>{const p=k.split("-");const dt=p.slice(1).join("-");return dt>=ws&&dt<=td;}).length;
+    const wkSlp=(d.sleep||[]).filter(s=>s.date>=ws&&s.date<=td);
+    const slpAvg=wkSlp.length?(wkSlp.reduce((s,e)=>s+(parseFloat(e.hours)||0),0)/wkSlp.length).toFixed(1):null;
+    const hDays=Object.entries(d.habitLogs||{}).filter(([dt])=>dt>=ws&&dt<=td);
+    const hDone=hDays.reduce((s,[,l])=>s+l.length,0);
+    const hMax=hDays.length*(d.habits||[]).length;
+    const wkPBs=(d.pbs||[]).filter(p=>{const dt=(p.date||"").split("/").reverse().join("-");return dt>=ws;}).length;
+    return[
+      ['📅 Sessions this week',wkSess+' logged'],
+      slpAvg?['😴 Sleep average',slpAvg+'h / night']:null,
+      hMax?['✅ Habits',hDone+'/'+hMax+' completed']:null,
+      wkPBs?['🏆 New PBs',wkPBs+(wkPBs===1?" PB":" PBs")]:null,
+    ].filter(Boolean).map((item,i)=>'<div style="display:flex;justify-content:space-between;padding:7px 0;'+(i>0?"border-top:1px solid var(--card-b)":"")+'"><span style="font-size:12px;color:var(--fg2)">'+item[0]+'</span><span style="font-size:12px;font-weight:700;color:#4ade80">'+item[1]+'</span></div>').join("");
+  })(),false)+
   (d.titles?.length?homeCard("titles","ACTIVE TITLE",'<div style="display:flex;gap:6px;flex-wrap:wrap">'+d.titles.map(t=>'<button onclick="setActiveTitle(\''+t+'\')" style="padding:5px 12px;border-radius:10px;cursor:pointer;font-size:11px;border:1px solid '+(d.activeTitle===t?"#a855f7":"var(--card-b)")+';background:'+(d.activeTitle===t?"rgba(168,85,247,0.15)":"transparent")+';color:'+(d.activeTitle===t?"#a855f7":"var(--fg2)")+'">'+t+'</button>').join("")+'</div>',true):"")+
-  // Quick Gunther — always visible
-  '<div class="card">'+
-    '<div class="sec-title">ASK GUNTHER</div>'+
-    '<div style="display:flex;gap:8px">'+
-      '<input class="inp" id="home-ask" placeholder="Quick question..." onkeydown="if(event.key===\'Enter\')quickAsk()">'+
-      '<button class="btn" onclick="quickAsk()" style="flex-shrink:0">↑</button>'+
-      '<button onclick="startVoice(\'home-ask\',quickAsk)" style="background:none;border:1px solid var(--inp-b);border-radius:7px;padding:8px 10px;cursor:pointer;font-size:14px;flex-shrink:0">🎤</button>'+
-    '</div>'+
-  '</div>'+
   homeCard("pbs","RECENT PBs",pbs.length?pbs.map((p,i)=>'<div style="display:flex;justify-content:space-between;padding:6px 0;'+(i<pbs.length-1?"border-bottom:1px solid var(--card-b)":"")+'"><span style="font-size:13px;color:var(--fg2)">'+p.lift+'</span><span style="font-size:13px;color:#4ade80;font-weight:700">'+p.weight+'kg × '+p.reps+'</span></div>').join(""):'<div style="font-size:11px;color:var(--mut)">No PBs logged yet</div>',true)+
   homeCard("todos","PENDING TASKS",todos.length?todos.map(t=>'<div style="display:flex;align-items:center;gap:10px;padding:5px 0"><div style="width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0"></div><span style="font-size:13px;color:var(--fg2)">'+t.text+'</span></div>').join(""):'<div style="font-size:11px;color:var(--mut)">No pending tasks</div>',false)+
   homeCard("phase","⚔️ PROTOCOL PROGRESS",buildPhaseMap(d),true)+
@@ -1242,10 +1260,8 @@ function buildWorkout(workout,d){
     if(workout?.style)html+='<div style="font-size:10px;color:var(--mut);margin-bottom:8px;letter-spacing:2px">'+workout.style.toUpperCase()+'</div>';
     html+='<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px;-webkit-overflow-scrolling:touch">'+
       '<button onclick="toggleTargets()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showTargets?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showTargets?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showTargets?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">🎯</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">TGTS</span></button>'+
-      '<button onclick="generateWarmUp()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid rgba(74,222,128,0.2);background:rgba(74,222,128,0.04);color:var(--fg2)"><span style="font-size:18px;line-height:1">🔥</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">WARM</span></button>'+
       '<button onclick="toggleHistory()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showHistory?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showHistory?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showHistory?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">📋</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">HIST</span></button>'+
       '<button onclick="state.workout.showSuperset=!state.workout.showSuperset;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showSuperset?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showSuperset?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showSuperset?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">⚡</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">SS</span></button>'+
-      '<button onclick="generatePreSessBrief()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid rgba(74,222,128,0.2);background:rgba(74,222,128,0.04);color:var(--fg2)"><span style="font-size:18px;line-height:1">🤖</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">BRIEF</span></button>'+
       '<button onclick="state.workout.showTemplates=!state.workout.showTemplates;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showTemplates?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showTemplates?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showTemplates?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">📋</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">TMPL</span></button>'+
       '<button onclick="state.workout.showAddExercise=!state.workout.showAddExercise;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showAddExercise?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showAddExercise?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showAddExercise?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">➕</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">ADD</span></button>'+
       '<button onclick="state.workout.showPlateCalc=!state.workout.showPlateCalc;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showPlateCalc?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showPlateCalc?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showPlateCalc?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">⚖️</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">PLATES</span></button>'+
@@ -1402,7 +1418,7 @@ function buildWorkout(workout,d){
       for(let s=1;s<=5;s++){
         html+='<div style="text-align:center"><div style="font-size:9px;color:var(--mut);margin-bottom:3px">S'+s+'</div>'+
           '<input type="number" placeholder="'+wUnit()+'" value="'+(logs[ei+"-"+s+"-weight"]?toDisp(logs[ei+"-"+s+"-weight"]):"")+'" oninput="logSet('+ei+','+s+',\'weight\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;outline:none;box-sizing:border-box">'+
-          '<input type="number" placeholder="reps" value="'+(logs[ei+"-"+s+"-reps"]||"")+'" oninput="logSet('+ei+','+s+',\'reps\',this.value)" onblur="checkStartTimer('+ei+','+s+')" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;margin-top:3px;outline:none;box-sizing:border-box">'+
+          '<input type="number" placeholder="reps" value="'+(logs[ei+"-"+s+"-reps"]||"")+'" oninput="logSet('+ei+','+s+',\'reps\',this.value)" style="width:100%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);color:var(--fg);padding:4px 2px;border-radius:4px;font-size:11px;text-align:center;margin-top:3px;outline:none;box-sizing:border-box">'+
           '</div>';
       }
       html+='</div><div style="font-size:9px;letter-spacing:2px;color:var(--mut);margin-bottom:6px">REPS IN RESERVE</div>'+
@@ -1849,6 +1865,51 @@ function buildChat(d){
     '</div>'+
     (apiKey?'<div style="font-size:10px;color:#4ade80;margin-top:8px">✓ Gunther is live — Gemini Flash</div>':'<div style="font-size:10px;color:var(--mut);margin-top:6px">Key stored on this device only — never sent anywhere else</div>')+
   '</div>';
+  if(!apiKey){
+    const split=getActiveSplit(d),wo=split[(state.currentDay-1)%split.length];
+    const today=new Date().toISOString().split("T")[0];
+    const todayWater=(d.water||[]).filter(w=>w.date===today).reduce((s,w)=>s+(w.ml||0),0);
+    const lastSleep=d.sleep?.slice(-1)[0];
+    const targets=(wo?.exercises||[]).slice(0,3).map((ex,i)=>{
+      const ov=d.exerciseOverrides?.[state.currentDay+"-"+i];const fe=ov?{...ex,...ov}:ex;
+      const t=getTarget(state.currentDay+"-"+fe.name,d);
+      return'<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--card-b);margin-top:4px"><span style="font-size:11px;color:var(--fg2)">'+fe.name+'</span><span style="font-size:11px;color:#4ade80;font-weight:700">'+t.advice+'</span></div>';
+    }).join("");
+    const lv=getLevel(d.xp||0);
+    return'<div style="padding:16px;overflow-y:auto;height:calc(100vh - 86px)">'+
+      '<div style="background:rgba(74,222,128,0.04);border:1px solid var(--card-b);border-radius:14px;padding:18px;margin-bottom:14px">'+
+        '<div style="font-size:9px;letter-spacing:3px;color:#4ade80;font-weight:700;margin-bottom:14px">⚔️ TRAINING SNAPSHOT</div>'+
+        '<div style="font-size:10px;letter-spacing:2px;color:var(--mut);margin-bottom:6px">TODAY — '+(wo?.label||"REST DAY").toUpperCase()+'</div>'+
+        (wo&&wo.type!=="rest"&&targets?targets:'<div style="font-size:11px;color:var(--mut);margin-top:4px">Rest day — focus on recovery 💤</div>')+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px">'+
+          '<div style="background:rgba(74,222,128,0.06);border-radius:10px;padding:12px">'+
+            '<div style="font-size:8px;letter-spacing:2px;color:var(--mut)">SLEEP</div>'+
+            '<div style="font-size:22px;font-weight:800;color:#4ade80;margin:4px 0">'+(lastSleep?lastSleep.hours+'h':'—')+'</div>'+
+            '<div style="font-size:9px;color:var(--mut)">last night</div>'+
+          '</div>'+
+          '<div style="background:rgba(56,189,248,0.06);border-radius:10px;padding:12px">'+
+            '<div style="font-size:8px;letter-spacing:2px;color:var(--mut)">WATER</div>'+
+            '<div style="font-size:22px;font-weight:800;color:#38bdf8;margin:4px 0">'+(todayWater>0?(todayWater/1000).toFixed(1)+'L':'0L')+'</div>'+
+            '<div style="font-size:9px;color:var(--mut)">of 2L goal</div>'+
+          '</div>'+
+          '<div style="background:rgba(249,115,22,0.06);border-radius:10px;padding:12px">'+
+            '<div style="font-size:8px;letter-spacing:2px;color:var(--mut)">STREAK</div>'+
+            '<div style="font-size:22px;font-weight:800;color:#f97316;margin:4px 0">'+(d.workoutStreak||0)+'</div>'+
+            '<div style="font-size:9px;color:var(--mut)">days 🔥</div>'+
+          '</div>'+
+          '<div style="background:rgba(74,222,128,0.06);border-radius:10px;padding:12px">'+
+            '<div style="font-size:8px;letter-spacing:2px;color:var(--mut)">LEVEL</div>'+
+            '<div style="font-size:22px;font-weight:800;color:#4ade80;margin:4px 0">'+lv.icon+'</div>'+
+            '<div style="font-size:9px;color:var(--mut)">'+lv.name+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--card-b);font-size:10px;color:var(--mut);line-height:1.6">'+
+          'Add a free Gemini API key below to unlock AI chat with Gunther. 1M tokens/day — no credit card needed.'+
+        '</div>'+
+      '</div>'+
+      setupCard+
+    '</div>';
+  }
   return'<div style="padding:16px;display:flex;flex-direction:column;height:calc(100vh - 86px)">'+
   setupCard+
   '<div id="chat-msgs" style="flex:1;overflow-y:auto;margin-bottom:12px">'+
@@ -2040,6 +2101,11 @@ function logSet(ei,si,field,val){
   if(!state.data.workoutLogs[sk])state.data.workoutLogs[sk]={};
   const stored=field==='weight'?String(fromInp(val)):val;
   state.data.workoutLogs[sk][ei+"-"+si+"-"+field]=stored;saveData();
+  if(field==='reps'&&val){
+    if(!window._tmrD)window._tmrD={};
+    clearTimeout(window._tmrD[ei+"-"+si]);
+    window._tmrD[ei+"-"+si]=setTimeout(()=>checkStartTimer(ei,si),1800);
+  }
 }
 function checkStartTimer(ei,si){
   const today=new Date().toISOString().split("T")[0],sk='d'+state.currentDay+"-"+today;
