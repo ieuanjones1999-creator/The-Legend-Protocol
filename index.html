@@ -299,6 +299,8 @@ function getPlateColor(p){return p>=20?"#ef4444":p>=15?"#facc15":p>=10?"#22c55e"
 function getTarget(exName,exType,history){
   if(!history||!history.length)return null;
   const last=history[history.length-1];
+  const lw0=parseFloat(last.weight)||0,lr0=parseInt(last.reps)||0;
+  if(last.injured)return{tw:lw0,tr:lr0,lw:lw0,lr:lr0,rpe:last.rpe||"1-2",advice:"🩹 Logged under injury mode — no target set",stalled:false,status:"Injured"};
   const prev=history.length>1?history[history.length-2]:null;
   const lw=parseFloat(last.weight)||0,lr=parseInt(last.reps)||0,rir=last.rpe||"1-2";
   if(!lw||!lr)return null;
@@ -388,7 +390,7 @@ let state={
     notifSettings:{workout:"",creatine:"",waterReminder:false},
     orm:{},measurements:[],weeklyReview:null,lastWeeklyReviewDate:null,
     preSessBriefs:{},sessionNotes:{},injuries:[],customTemplates:[],bossNotifCycle:{minor:0,major:0,raid:0},bossActiveFights:{minor:null,major:null,raid:null},
-    habits:[],habitLogs:{},extraExercises:{},unitPref:"kg",hardMode:false,protocolStartDate:null,day1Stats:null,
+    habits:[],habitLogs:{},extraExercises:{},unitPref:"kg",hardMode:false,injuredMode:false,protocolStartDate:null,day1Stats:null,
     activeSplitId:"default",customSplits:[],dayLabels:{}
   },
   chat:{msgs:[{role:"assistant",text:"Gunther online. Legend Protocol V2.0 loaded. Ready when you are."}],input:"",loading:false},
@@ -692,6 +694,13 @@ function buildWaterRing(ml,goal){
 }
 
 function checkDeloadNeeded(d){return getStalledExercises(d).filter(e=>e.status==="Regression").length>=3;}
+
+function toggleInjuredMode(){
+  state.data.injuredMode=!state.data.injuredMode;
+  saveData();
+  showToast(state.data.injuredMode?"🩹 Injury mode ON — tracking without targets":"✓ Injury mode OFF — full tracking resumed");
+  render();
+}
 
 async function generateDeloadPlan(){
   if(!state.data.apiKey){showToast("Add API key in Chat tab first");return;}
@@ -1083,7 +1092,7 @@ function buildHome(workout,d){
   const lv=getLevel(d.xp||0);
   const xpPct=lv.next?Math.min(((d.xp||0)-lv.prev)/(lv.next-lv.prev)*100,100):100;
   const streak=d.workoutStreak||0;
-  const deload=checkDeloadNeeded(d);
+  const deload=!d.injuredMode&&checkDeloadNeeded(d);
   const todayWater=(d.water||[]).filter(w=>w.date===new Date().toISOString().split("T")[0]).reduce((s,w)=>s+w.ml,0);
 
   return'<div style="padding:16px">'+
@@ -1114,7 +1123,7 @@ function buildHome(workout,d){
     '<div style="background:rgba(74,222,128,0.1);border-radius:6px;height:10px"><div style="background:linear-gradient(90deg,#4ade80,#86efac);height:100%;border-radius:6px;width:'+xpPct+'%;transition:width 0.6s cubic-bezier(0.4,0,0.2,1)"></div></div>'+
   '</div>'+
   // Deload warning
-  (deload||d.deloadRecommended?'<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px;margin-bottom:14px"><div style="font-size:10px;letter-spacing:3px;color:#ef4444;margin-bottom:6px">⚠️ DELOAD RECOMMENDED</div><div style="font-size:12px;color:var(--fg2);margin-bottom:10px">'+getStalledExercises(d).length+' exercises stalling. Gunther can plan your deload week.</div><button onclick="generateDeloadPlan()" class="btn" style="font-size:11px;padding:7px 14px;background:rgba(239,68,68,0.15);border-color:#ef4444;color:#ef4444">🤖 GET DELOAD PLAN</button>'+(d.deloadPlan?'<div style="margin-top:12px;font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap;border-top:1px solid rgba(239,68,68,0.2);padding-top:10px">'+d.deloadPlan+'</div>':"")+
+  (!d.injuredMode&&(deload||d.deloadRecommended)?'<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:10px;padding:14px;margin-bottom:14px"><div style="font-size:10px;letter-spacing:3px;color:#ef4444;margin-bottom:6px">⚠️ DELOAD RECOMMENDED</div><div style="font-size:12px;color:var(--fg2);margin-bottom:10px">'+getStalledExercises(d).length+' exercises stalling. Gunther can plan your deload week.</div><button onclick="generateDeloadPlan()" class="btn" style="font-size:11px;padding:7px 14px;background:rgba(239,68,68,0.15);border-color:#ef4444;color:#ef4444">🤖 GET DELOAD PLAN</button>'+(d.deloadPlan?'<div style="margin-top:12px;font-size:12px;color:var(--fg2);line-height:1.7;white-space:pre-wrap;border-top:1px solid rgba(239,68,68,0.2);padding-top:10px">'+d.deloadPlan+'</div>':"")+
   '</div>':"")+
   // Day selector
   '<div class="card">'+
@@ -1238,7 +1247,7 @@ function buildWorkout(workout,d){
   const isRest=workout?.type==="rest";
   const restLog=d.restLogs?.[today]||{};
   const rpeC={"2-3":"#4ade80","1-2":"#f97316","0-1":"#ef4444"};
-  const deload=checkDeloadNeeded(d)||d.deloadRecommended;
+  const deload=!d.injuredMode&&(checkDeloadNeeded(d)||d.deloadRecommended);
 
   let html='<div style="padding:16px">'+
     '<div style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px">'+
@@ -1248,6 +1257,7 @@ function buildWorkout(workout,d){
       '<div style="font-size:9px;letter-spacing:2px;color:var(--mut)">'+(d.activeSplitId==="default"||!d.activeSplitId?"CBUM HYPERTROPHY":((d.customSplits||[]).find(s=>s.id===d.activeSplitId)?.name||"CUSTOM SPLIT").toUpperCase())+'</div>'+
       '<button onclick="setTab(\'SplitManager\')" style="font-size:9px;letter-spacing:1px;padding:4px 10px;border-radius:6px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#4ade80;cursor:pointer;font-weight:700">⚙ CHANGE SPLIT</button>'+
     '</div>'+
+    (d.injuredMode?'<div style="background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.4);border-radius:8px;padding:12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;color:#f97316;font-weight:700;margin-bottom:2px">🩹 INJURY MODE ACTIVE</div><div style="font-size:10px;color:var(--fg2)">Tracking only — no deload triggers or weight targets.</div></div><button onclick="toggleInjuredMode()" style="font-size:9px;padding:4px 10px;border-radius:6px;background:rgba(249,115,22,0.15);border:1px solid rgba(249,115,22,0.4);color:#f97316;cursor:pointer;font-weight:700">OFF</button></div>':"")+
     (deload?'<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;margin-bottom:12px"><div style="font-size:12px;color:#ef4444;margin-bottom:8px">⚠️ Deload recommended — '+getStalledExercises(d).length+' exercises stalling</div><button onclick="generateDeloadPlan()" class="btn" style="font-size:10px;padding:5px 12px;background:rgba(239,68,68,0.15);border-color:#ef4444;color:#ef4444">🤖 GET PLAN</button>'+(d.deloadPlan?'<div style="margin-top:10px;font-size:11px;color:var(--fg2);line-height:1.6;white-space:pre-wrap;border-top:1px solid rgba(239,68,68,0.2);padding-top:8px">'+d.deloadPlan+'</div>':"")+
     '</div>':"")+
     '<div class="card"><div class="sec-title" style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="startRenameDay('+state.currentDay+',this)"><span>'+(workout?.label||"")+'</span><span style="font-size:11px;color:var(--mut)">✏️</span></div>';
@@ -1263,6 +1273,7 @@ function buildWorkout(workout,d){
     if(workout?.style)html+='<div style="font-size:10px;color:var(--mut);margin-bottom:8px;letter-spacing:2px">'+workout.style.toUpperCase()+'</div>';
     html+='<div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px;-webkit-overflow-scrolling:touch">'+
       '<button onclick="toggleTargets()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showTargets?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showTargets?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showTargets?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">🎯</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">TGTS</span></button>'+
+      '<button onclick="toggleInjuredMode()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(d.injuredMode?"rgba(249,115,22,0.6)":"rgba(74,222,128,0.2)")+';background:'+(d.injuredMode?"rgba(249,115,22,0.15)":"rgba(74,222,128,0.04)")+';color:'+(d.injuredMode?"#f97316":"var(--fg2)")+'"><span style="font-size:18px;line-height:1">🩹</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">INJURE</span></button>'+
       '<button onclick="toggleHistory()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showHistory?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showHistory?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showHistory?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">📋</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">HIST</span></button>'+
       '<button onclick="state.workout.showSuperset=!state.workout.showSuperset;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showSuperset?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showSuperset?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showSuperset?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">⚡</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">SS</span></button>'+
       '<button onclick="state.workout.showTemplates=!state.workout.showTemplates;render()" style="flex-shrink:0;width:52px;height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:8px;cursor:pointer;border:1px solid '+(state.workout.showTemplates?'#4ade80':'rgba(74,222,128,0.2)')+';background:'+(state.workout.showTemplates?'rgba(74,222,128,0.15)':'rgba(74,222,128,0.04)')+';color:'+(state.workout.showTemplates?'#4ade80':'var(--fg2)')+'"><span style="font-size:18px;line-height:1">📋</span><span style="font-size:7px;letter-spacing:0.5px;line-height:1">TMPL</span></button>'+
@@ -2143,7 +2154,7 @@ function setRPE(ei,rpe){
     for(let s=1;s<=5;s++){const w=parseFloat(logs[ei+"-"+s+"-weight"]||0);if(w>bw){bw=w;br=parseInt(logs[ei+"-"+s+"-reps"]||0);}}
     const exKey=state.currentDay+"-"+ex.name;
     let hist=[...(state.data.exerciseHistory[exKey]||[])];
-    const entry={weight:bw,reps:br,rpe,date:today};
+    const entry={weight:bw,reps:br,rpe,date:today,injured:!!state.data.injuredMode};
     const idx=hist.findIndex(h=>h.date===today);
     if(idx>=0)hist[idx]=entry;else hist.push(entry);
     if(hist.length>12)hist=hist.slice(-12);
@@ -2155,7 +2166,7 @@ function setRPE(ei,rpe){
   if(baseExes.length&&Object.keys(rpeLog).length>=baseExes.length){
     updateStreak();
     awardXP(35,"Workout Complete");
-    state.data.deloadRecommended=checkDeloadNeeded(state.data);
+    state.data.deloadRecommended=!state.data.injuredMode&&checkDeloadNeeded(state.data);
     checkBossFightUnlocks(state.data);
   }
   checkAllChallenges(state.data);
