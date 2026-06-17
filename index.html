@@ -1141,8 +1141,11 @@ function buildHome(workout,d){
     if(!exes.length)return'<div style="font-size:11px;color:var(--mut)">No exercises listed.</div>';
     return exes.map((ex,i)=>{
       const ov=d.exerciseOverrides?.[state.currentDay+"-"+i];const fe=ov?{...ex,...ov}:ex;
-      const t=getTarget(state.currentDay+"-"+fe.name,d);
-      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;'+(i>0?"border-top:1px solid var(--card-b)":"")+'"><span style="font-size:12px;color:var(--fg2);flex:1">'+fe.name+'</span><span style="font-size:12px;font-weight:700;color:'+(t.stalled?"#f97316":"#4ade80")+';text-align:right">'+t.advice+'</span></div>';
+      const hist=d.exerciseHistory?.[state.currentDay+"-"+fe.name]||[];
+      const t=getTarget(fe.name,fe.type||"compound",hist);
+      const adv=t?t.advice:"First session — set your baseline";
+      const col=t&&t.stalled?"#f97316":"#4ade80";
+      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;'+(i>0?"border-top:1px solid var(--card-b)":"")+'"><span style="font-size:12px;color:var(--fg2);flex:1">'+fe.name+'</span><span style="font-size:12px;font-weight:700;color:'+col+';text-align:right">'+adv+'</span></div>';
     }).join("");
   })(),true)+
   homeCard("thisweek","THIS WEEK",(()=>{
@@ -1872,8 +1875,9 @@ function buildChat(d){
     const lastSleep=d.sleep?.slice(-1)[0];
     const targets=(wo?.exercises||[]).slice(0,3).map((ex,i)=>{
       const ov=d.exerciseOverrides?.[state.currentDay+"-"+i];const fe=ov?{...ex,...ov}:ex;
-      const t=getTarget(state.currentDay+"-"+fe.name,d);
-      return'<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--card-b);margin-top:4px"><span style="font-size:11px;color:var(--fg2)">'+fe.name+'</span><span style="font-size:11px;color:#4ade80;font-weight:700">'+t.advice+'</span></div>';
+      const hist=d.exerciseHistory?.[state.currentDay+"-"+fe.name]||[];
+      const t=getTarget(fe.name,fe.type||"compound",hist);
+      return'<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--card-b);margin-top:4px"><span style="font-size:11px;color:var(--fg2)">'+fe.name+'</span><span style="font-size:11px;color:#4ade80;font-weight:700">'+((t&&t.advice)||"First session")+'</span></div>';
     }).join("");
     const lv=getLevel(d.xp||0);
     return'<div style="padding:16px;overflow-y:auto;height:calc(100vh - 86px)">'+
