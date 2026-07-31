@@ -758,7 +758,7 @@ function createSplit(name,fromDefault){
   const id='sp_'+Date.now().toString(36);
   const days=fromDefault
     ?SPLIT.map((s,i)=>({...s}))
-    :[{day:1,label:"Day 1",type:"workout",exercises:[{name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:""}]}];
+    :[{day:1,label:"Day 1",type:"workout",exercises:[{name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:"",type:"compound"}]}];
   state.data.customSplits=state.data.customSplits||[];
   state.data.customSplits.push({id,name,createdAt:new Date().toLocaleDateString("en-GB"),days});
   saveData();
@@ -775,7 +775,7 @@ function addSplitDay(splitId){
   const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
   if(!split||split.days.length>=8)return;
   const n=split.days.length+1;
-  split.days.push({day:n,label:"Day "+n,type:"workout",exercises:[{name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:""}]});
+  split.days.push({day:n,label:"Day "+n,type:"workout",exercises:[{name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:"",type:"compound"}]});
   saveData();render();
 }
 function removeSplitDay(splitId,dayNum){
@@ -796,7 +796,7 @@ function addSplitExercise(splitId,dayNum){
   const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
   if(!split)return;
   const day=split.days.find(d=>d.day===dayNum);
-  if(day){if(!day.exercises)day.exercises=[];day.exercises.push({name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:""});}
+  if(day){if(!day.exercises)day.exercises=[];day.exercises.push({name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:"",type:"compound"});}
   saveData();render();
 }
 function removeSplitExercise(splitId,dayNum,exIdx){
@@ -923,6 +923,10 @@ function buildSplitEditor(d){
             '<div><div style="font-size:8px;color:var(--mut);margin-bottom:2px">SETS</div><input value="'+ex.sets+'" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'sets\',this.value)" style="width:100%;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:12px;box-sizing:border-box"></div>'+
             '<div><div style="font-size:8px;color:var(--mut);margin-bottom:2px">REPS</div><input value="'+ex.reps+'" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'reps\',this.value)" style="width:100%;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:12px;box-sizing:border-box"></div>'+
             '<div><div style="font-size:8px;color:var(--mut);margin-bottom:2px">REST</div><input value="'+(ex.rest||"")+'" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'rest\',this.value)" style="width:100%;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:12px;box-sizing:border-box"></div>'+
+          '</div>'+
+          '<div style="display:flex;gap:4px;margin-bottom:6px">'+
+            '<button onclick="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'type\',\'compound\')" style="flex:1;padding:4px;border-radius:4px;font-size:9px;cursor:pointer;border:1px solid '+(ex.type==="isolation"?"rgba(74,222,128,0.2)":"#4ade80")+';background:'+(ex.type==="isolation"?"rgba(74,222,128,0.04)":"rgba(74,222,128,0.15)")+';color:'+(ex.type==="isolation"?"var(--fg2)":"#4ade80")+'">CMPD</button>'+
+            '<button onclick="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'type\',\'isolation\')" style="flex:1;padding:4px;border-radius:4px;font-size:9px;cursor:pointer;border:1px solid '+(ex.type==="isolation"?"#f97316":"rgba(74,222,128,0.2)")+';background:'+(ex.type==="isolation"?"rgba(249,115,22,0.15)":"rgba(74,222,128,0.04)")+';color:'+(ex.type==="isolation"?"#f97316":"var(--fg2)")+'">ISOL</button>'+
           '</div>'+
           '<input value="'+(ex.notes||"")+'" placeholder="Notes (optional)" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'notes\',this.value)" style="width:100%;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:11px;box-sizing:border-box">'+
         '</div>';
@@ -1369,7 +1373,7 @@ function buildWorkout(workout,d){
       const hasOverride=!!(d.exerciseOverrides?.[editKey]);
       const exKey=state.currentDay+"-"+ex.name;
       const history=d.exerciseHistory?.[exKey]||[];
-      const target=getTarget(ex.name,ex.type,history);
+      const target=getTarget(ex.name,ex.type||"compound",history);
       const curRpe=rpe[ei];
       const sparkPts=history.slice(-6).map((h,i)=>({x:h.date?h.date.slice(5):"",y:parseFloat(h.weight)||0}));
       const injFlagged=activeInjuries.some(i=>(INJURY_EXERCISE_MAP[i.area]||[]).includes(ex.name));
@@ -1415,7 +1419,7 @@ function buildWorkout(workout,d){
           '<span style="font-size:10px;color:#4ade80">Reps: '+ex.reps+'</span>'+
           '<span style="font-size:10px;color:var(--mut)">Tempo: '+ex.tempo+'</span>'+
           '<span style="font-size:10px;color:var(--mut)">Rest: '+ex.rest+'</span>'+
-          '<button onclick="startTimer('+(parseInt(ex.rest.replace(/[^0-9]/g,"")||"90")||90)+',\''+ex.name+'\')" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid rgba(74,222,128,0.3);background:none;color:#4ade80;cursor:pointer">⏱ TIMER</button>'+
+          '<button onclick="startTimer('+(parseInt((ex.rest||"90s").replace(/[^0-9]/g,"")||"90")||90)+',\''+ex.name+'\')" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid rgba(74,222,128,0.3);background:none;color:#4ade80;cursor:pointer">⏱ TIMER</button>'+
         '</div>'+
         '<div style="font-size:11px;color:var(--fg2);margin-bottom:10px;font-style:italic">'+ex.notes+'</div>';
       if(sparkPts.length>=2)html+='<div style="margin-bottom:8px;opacity:0.7">'+buildSvgLineChart(sparkPts,"#4ade80",50)+'</div>';
