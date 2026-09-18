@@ -757,7 +757,7 @@ function switchSplit(id){
 function createSplit(name,fromDefault){
   const id='sp_'+Date.now().toString(36);
   const days=fromDefault
-    ?SPLIT.map((s,i)=>({...s}))
+    ?SPLIT.map((s,i)=>({...s,exercises:[]}))
     :[{day:1,label:"Day 1",type:"workout",exercises:[{name:"",sets:"3",reps:"10",tempo:"",rest:"90s",notes:"",type:"compound"}]}];
   state.data.customSplits=state.data.customSplits||[];
   state.data.customSplits.push({id,name,createdAt:new Date().toLocaleDateString("en-GB"),days});
@@ -790,6 +790,13 @@ function setSplitDayType(splitId,dayNum,type){
   if(!split)return;
   const day=split.days.find(d=>d.day===dayNum);
   if(day){day.type=type;if(type==="rest"&&!day.tasks)day.tasks=[];}
+  saveData();render();
+}
+function clearSplitDay(splitId,dayNum){
+  const split=(state.data.customSplits||[]).find(s=>s.id===splitId);
+  if(!split)return;
+  const day=split.days.find(d=>d.day===dayNum);
+  if(day)day.exercises=[];
   saveData();render();
 }
 function addSplitExercise(splitId,dayNum){
@@ -886,7 +893,7 @@ function buildSplitManager(d){
       '<input id="newSplitName" placeholder="Split name (e.g. My PPL)" style="background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:9px 13px;border-radius:7px;font-size:13px;width:100%;box-sizing:border-box;margin-bottom:10px">'+
       '<div style="display:flex;gap:8px">'+
         '<button onclick="const n=document.getElementById(\'newSplitName\').value.trim();if(n)createSplit(n,false);else showToast(\'Enter a name first\')" style="flex:1;padding:10px;border-radius:8px;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#4ade80;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px">START BLANK</button>'+
-        '<button onclick="const n=document.getElementById(\'newSplitName\').value.trim();if(n)createSplit(n,true);else showToast(\'Enter a name first\')" style="flex:1;padding:10px;border-radius:8px;background:rgba(74,222,128,0.06);border:1px solid var(--card-b);color:var(--fg2);cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px">COPY CBUM</button>'+
+        '<button onclick="const n=document.getElementById(\'newSplitName\').value.trim();if(n)createSplit(n,true);else showToast(\'Enter a name first\')" style="flex:1;padding:10px;border-radius:8px;background:rgba(74,222,128,0.06);border:1px solid var(--card-b);color:var(--fg2);cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px">COPY STRUCTURE</button>'+
       '</div>'+
     '</div>'+
   '</div>';
@@ -931,7 +938,10 @@ function buildSplitEditor(d){
           '<input value="'+(ex.notes||"")+'" placeholder="Notes (optional)" onchange="updateSplitExercise(\''+splitId+'\','+day.day+','+ei+',\'notes\',this.value)" style="width:100%;background:var(--inp);border:1px solid var(--inp-b);color:var(--fg);padding:5px 8px;border-radius:6px;font-size:11px;box-sizing:border-box">'+
         '</div>';
       });
-      html+='<button onclick="addSplitExercise(\''+splitId+'\','+day.day+')" style="width:100%;padding:8px;border-radius:8px;background:rgba(74,222,128,0.06);border:1px dashed rgba(74,222,128,0.3);color:#4ade80;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px;margin-top:2px">+ ADD EXERCISE</button>';
+      html+='<div style="display:flex;gap:6px;margin-top:2px">'+
+        '<button onclick="addSplitExercise(\''+splitId+'\','+day.day+')" style="flex:1;padding:8px;border-radius:8px;background:rgba(74,222,128,0.06);border:1px dashed rgba(74,222,128,0.3);color:#4ade80;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px">+ ADD EXERCISE</button>'+
+        '<button onclick="if(confirm(\'Remove all exercises from this day?\'))clearSplitDay(\''+splitId+'\','+day.day+')" style="padding:8px 12px;border-radius:8px;background:rgba(239,68,68,0.06);border:1px dashed rgba(239,68,68,0.3);color:#ef4444;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px;white-space:nowrap">✕ CLEAR DAY</button>'+
+      '</div>';
     }
     html+='</div>';
   });
