@@ -412,9 +412,9 @@ function loadState(){
     if(oldSaved){state.data={...state.data,...oldSaved};if(oldSaved.currentDay)state.currentDay=oldSaved.currentDay;}
   }
   try{const c=sessionStorage.getItem("legend-chat-v2");if(c){const p=JSON.parse(c);if(Date.now()-p.ts<86400000)state.chat.msgs=p.msgs;}}catch{}
-  // One-time migration: clear extraExercises that bled in from a different split
-  if(state.data.activeSplitId&&state.data.activeSplitId!=="default"&&!state.data._extraMigrated){
-    state.data.extraExercises={};state.data._extraMigrated=true;
+  // One-time migration: clear extras/overrides that bled in from a different split
+  if(state.data.activeSplitId&&state.data.activeSplitId!=="default"&&!state.data._extraMigrated2){
+    state.data.extraExercises={};state.data.exerciseOverrides={};state.data._extraMigrated2=true;
   }
   if(state.theme==="light")document.body.classList.add("light");
   state.loaded=true;
@@ -756,6 +756,7 @@ function getActiveSplit(d){
 function switchSplit(id){
   state.data.activeSplitId=id;
   state.data.extraExercises={};
+  state.data.exerciseOverrides={};
   state.currentDay=1;
   saveData();render();
   showToast("✓ Split activated");
